@@ -34,10 +34,7 @@
                 <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
                     <label class="text-xs font-bold text-slate-500 uppercase">ปี:</label>
                     <select id="yearFilter" onchange="handleFilterChange()" class="bg-transparent font-bold text-sm text-indigo-700 outline-hidden cursor-pointer">
-                        <option value="2026" selected>2026</option>
-                        <option value="2027">2027</option>
-                        <option value="2028">2028</option>
-                    </select>
+                        </select>
                 </div>
 
                 <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
@@ -164,13 +161,47 @@
                     };
                 });
 
-                updateOwnerDropdownOptions();
+                updateYearDropdownOptions(); // คำนวณปีออโต้
+                updateOwnerDropdownOptions(); // คำนวณผู้ดูแลออโต้
                 renderAll();
             } catch (err) {
                 console.error("Error fetching data:", err.message);
             } finally {
                 showLoader(false);
             }
+        }
+
+        // ฟังก์ชันหัวใจใหม่: ตรวจจับและงอกปุ่มปีให้แบบ Dynamic อัตโนมัติ
+        function updateYearDropdownOptions() {
+            const yearSelect = document.getElementById('yearFilter');
+            const uniqueYears = new Set();
+            
+            // ใส่ปีปัจจุบันและปีใกล้เคียงสแตนด์บายไว้เป็นพื้นฐานก่อน
+            const thisYear = new Date().getFullYear();
+            uniqueYears.add(thisYear);
+            uniqueYears.add(thisYear + 1);
+            uniqueYears.add(thisYear + 2);
+
+            // วิ่งไปกวาดข้อมูลปีทั้งหมดที่ทีมงานกรอกไว้ในคลาวด์มารวมด้วย
+            projects.forEach(p => {
+                (p.subTasks || []).forEach(s => {
+                    if(s.start) uniqueYears.add(new Date(s.start).getFullYear());
+                    if(s.end) uniqueYears.add(new Date(s.end).getFullYear());
+                });
+            });
+
+            // เรียงลำดับปีจากน้อยไปมาก
+            const sortedYears = Array.from(uniqueYears).sort((a, b) => a - b);
+            
+            // วาดปุ่ม Dropdown ใหม่
+            yearSelect.innerHTML = '';
+            sortedYears.forEach(yr => {
+                const opt = document.createElement('option');
+                opt.value = yr;
+                opt.innerText = yr;
+                if(yr === currentSelectedYear) opt.selected = true;
+                yearSelect.appendChild(opt);
+            });
         }
 
         function calcProjectMeta(proj) {
