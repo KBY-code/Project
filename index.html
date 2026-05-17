@@ -115,11 +115,10 @@
     </div>
 
     <script>
-        // === ⚙️ รหัสโปรเจกต์ Supabase ของคุณ ⚙️ ===
+        // === ⚙️ รหัสโปรเจกต์ Supabase ของคุณ ===
         const SUPABASE_URL = "https://mwssrgdxayflsawrryda.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13c3NyZ2R4YXlmbHNhd3JyeWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NzEwMTcsImV4cCI6MjA5NDU0NzAxN30.fnDveYvLP6DmSOCqsWqM4RA0_VUyzTUI5cU61CoNxG8";
         
-        // แก้ไขบรรทัดเจ้าปัญหาให้เรียกใช้งาน library อย่างถูกต้องโดยไม่ประกาศตัวแปรซ้ำ
         const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let projects = [];
@@ -169,7 +168,7 @@
                 renderAll();
             } catch (err) {
                 console.error("Error fetching data:", err.message);
-            } Alexander: finally {
+            } finally {
                 showLoader(false);
             }
         }
