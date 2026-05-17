@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cloud Enterprise Gantt Tracking Hub</title>
+    <!-- Tailwind CSS & Lucide Icons -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Supabase JS Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Sarabun', sans-serif; }
+        .gantt-grid { grid-template-columns: 260px repeat(12, 1fr); }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen">
+
+    <div class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Loader Status -->
+        <div id="globalLoader" class="fixed top-4 right-4 bg-slate-900 text-white text-xs px-3 py-1.5 rounded-lg shadow-md flex items-center gap-2 z-50 opacity-0 transition-opacity pointer-events-none">
+            <div class="animate-spin rounded-full h-3.5 w-3.5 border-2 border-white/20 border-t-white"></div>
+            <span>กำลังซิงค์คลาวด์...</span>
+        </div>
+
+        <!-- Header & Top Filters -->
+        <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
+            <div>
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="cloud-lightning" class="text-indigo-600"></i>
+                    Cloud Gantt & Owners Hub
+                </h1>
+                <p class="text-slate-500 text-sm mt-1">อัปเดตข้อมูลแบบ Real-time ร่วมกันผ่านระบบ Cloud Database</p>
+            </div>
+            
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto justify-end">
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                    <label class="text-xs font-bold text-slate-500 uppercase">ปี:</label>
+                    <select id="yearFilter" onchange="handleFilterChange()" class="bg-transparent font-bold text-sm text-indigo-700 outline-hidden cursor-pointer">
+                        <option value="2026" selected>2026</option>
+                        <option value="2027">2027</option>
+                        <option value="2028">2028</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
+                    <label class="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">👤 ผู้ดูแล:</label>
+                    <select id="ownerFilter" onchange="handleFilterChange()" class="bg-transparent font-bold text-sm text-amber-700 outline-hidden cursor-pointer">
+                        <option value="ALL">ทั้งหมด</option>
+                    </select>
+                </div>
+                
+                <button onclick="openProjectModal()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 shadow-sm cursor-pointer shrink-0">
+                    <i data-lucide="plus" class="w-4 h-4"></i> สร้างโปรเจกต์ใหม่
+                </button>
+            </div>
+        </header>
+
+        <!-- Gantt Chart -->
+        <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-100 mb-8 overflow-x-auto">
+            <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                    <i data-lucide="gantt-chart" class="text-indigo-600"></i> แผนผังเวลาประจำปี <span id="ganttYearTitle" class="text-indigo-600 font-bold">2026</span>
+                </h2>
+            </div>
+            <div class="min-w-[950px]">
+                <div class="grid gantt-grid border-b border-slate-200 pb-3 text-center text-xs font-bold text-slate-400 uppercase tracking-wider">
+                    <div class="text-left text-slate-500 pl-2">โครงการ (ผู้ดูแล) / งานย่อย</div>
+                    <div>ม.ค.</div><div>ก.พ.</div><div>มี.ค.</div><div>เม.ย.</div><div>พ.ค.</div><div>มิ.ย.</div>
+                    <div>ก.ค.</div><div>ส.ค.</div><div>ก.ย.</div><div>ต.ค.</div><div>พ.ย.</div><div>ธ.ค.</div>
+                </div>
+                <div id="ganttRowsContainer" class="divide-y divide-slate-100"></div>
+            </div>
+        </div>
+
+        <!-- Cards Container -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 space-y-6">
+                <div id="projectCardsContainer" class="space-y-6"></div>
+            </div>
+            <!-- Stats -->
+            <div class="space-y-6">
+                <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
+                    <h2 class="text-lg font-semibold mb-4">สรุปสถานะปัจจุบัน</h2>
+                    <div class="grid grid-cols-3 gap-2 text-center text-xs font-medium">
+                        <div class="bg-amber-50 text-amber-700 p-3 rounded-xl border border-amber-100"><div class="text-xl font-bold mb-1" id="statPlanning">0</div>Planning</div>
+                        <div class="bg-blue-50 text-blue-700 p-3 rounded-xl border border-blue-100"><div class="text-xl font-bold mb-1" id="statOngoing">0</div>Ongoing</div>
+                        <div class="bg-emerald-50 text-emerald-700 p-3 rounded-xl border border-emerald-100"><div class="text-xl font-bold mb-1" id="statDone">0</div>Done</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Form -->
+    <div id="projectModal" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs hidden items-center justify-center p-4 z-50">
+        <div class="bg-white rounded-2xl w-full max-w-md shadow-xl overflow-hidden border border-slate-100">
+            <div class="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                <h3 id="modalTitle" class="text-lg font-semibold text-slate-900">สร้างโปรเจกต์ใหม่</h3>
+                <button onclick="closeProjectModal()" class="text-slate-400 hover:text-slate-600"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="projectForm" onsubmit="saveProject(event)" class="p-6 space-y-4">
+                <input type="hidden" id="projectId">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อโปรเจกต์หลัก *</label>
+                    <input type="text" id="projectName" required class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">ชื่อผู้รับผิดชอบ *</label>
+                    <input type="text" id="projectOwner" required placeholder="เช่น เก่ง, ซีน, แม็ค" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-1">รายละเอียดโครงการ</label>
+                    <textarea id="projectDesc" rows="3" class="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm"></textarea>
+                </div>
+                <div class="flex justify-end gap-3 pt-2">
+                    <button type="button" onclick="closeProjectModal()" class="text-sm font-medium text-slate-500">ยกเลิก</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-medium">บันทึกโครงการ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+// === ⚠️ นำรหัสจาก SUPABASE มาใส่ที่นี่ ⚠️ ===
+        const SUPABASE_URL = "https://mwssrgdxayflsawrryda.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13c3NyZ2R4YXlmbHNhd3JyeWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NzEwMTcsImV4cCI6MjA5NDU0NzAxN30.fnDveYvLP6DmSOCqsWqM4RA0_VUyzTUI5cU61CoNxG8";
+        
+        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let projects = [];
+        let currentSelectedYear = 2026;
+        let currentSelectedOwner = 'ALL';
+        let editingSubTasks = {};
+        let expandedGanttRows = JSON.parse(localStorage.getItem('expanded_gantt_v9')) || {};
+
+        function showLoader(show) {
+            document.getElementById('globalLoader').style.opacity = show ? '1' : '0';
+        }
+
+        function formatThDate(dateStr) {
+            if(!dateStr) return '-';
+            const d = new Date(dateStr);
+            const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+            return `${d.getDate()} ${months[d.getMonth()]}`;
+        }
+
+        // โหลดข้อมูลแบบผสานจาก Supabase คลาวด์
+        async function fetchAllDataFromServer() {
+            showLoader(true);
+            try {
+                // ดึงข้อมูลโปรเจกต์หลัก
+                let { data: dbProjects, error: pErr } = await supabase.from('projects').select('*');
+                if (pErr) throw pErr;
+
+                // ดึงข้อมูลงานย่อย
+                let { data: dbSubTasks, error: sErr } = await supabase.from('sub_tasks').select('*');
+                if (sErr) throw sErr;
+
+                // ประกอบร่างข้อมูลโครงสร้างเดิม
+                projects = dbProjects.map(p => {
+                    const subs = dbSubTasks.filter(s => s.project_id === p.id).map(s => ({
+                        id: s.id,
+                        name: s.name,
+                        start: s.start_date,
+                        end: s.end_date,
+                        done: s.done
+                    }));
+                    return {
+                        id: p.id,
+                        name: p.name,
+                        owner: p.owner,
+                        desc: p.description,
+                        subTasks: subs
+                    };
+                });
+
+                updateOwnerDropdownOptions();
+                renderAll();
+            } catch (err) {
+                console.error("Error fetching data:", err.message);
+                alert("เกิดข้อผิดพลาดในการดึงข้อมูลจาก Cloud Database");
+            } finally {
+                showLoader(false);
+            }
+        }
+
+        function calcProjectMeta(proj) {
+            if (!proj.subTasks || proj.subTasks.length === 0) {
+                return { start: null, end: null, status: 'Planning', percent: 0, total: 0, done: 0, years: [] };
+            }
+            let startDates = proj.subTasks.map(s => s.start).filter(d => d);
+            let endDates = proj.subTasks.map(s => s.end).filter(d => d);
+            let minStart = startDates.length > 0 ? startDates.reduce((m, p) => p < m ? p : m) : null;
+            let maxEnd = endDates.length > 0 ? endDates.reduce((m, p) => p > m ? p : m) : null;
+
+            let yearsSet = new Set();
+            proj.subTasks.forEach(s => {
+                if(s.start) yearsSet.add(new Date(s.start).getFullYear());
+                if(s.end) yearsSet.add(new Date(s.end).getFullYear());
+            });
+
+            const total = proj.subTasks.length;
+            const done = proj.subTasks.filter(s => s.done).length;
+            const percent = Math.round((done / total) * 100);
+
+            let status = 'Planning';
+            if (done > 0 && done < total) status = 'Ongoing';
+            else if (done === total && total > 0) status = 'Done';
+
+            return { start: minStart, end: maxEnd, status, percent, total, done, years: Array.from(yearsSet) };
+        }
+
+        function getGanttStyleForYear(startDateStr, endDateStr, viewingYear) {
+            if(!startDateStr || !endDateStr) return { display: 'none' };
+            let start = new Date(startDateStr);
+            let end = new Date(endDateStr);
+            const yearStart = new Date(`${viewingYear}-01-01`);
+            const yearEnd = new Date(`${viewingYear}-12-31`);
+            
+            if (end < yearStart || start > yearEnd) return { display: 'none' };
+
+            let renderStart = start < yearStart ? yearStart : start;
+            let renderEnd = end > yearEnd ? yearEnd : end;
+            const totalMs = yearEnd - yearStart;
+            return {
+                left: `${Math.max(0, ((renderStart - yearStart) / totalMs) * 100)}%`,
+                width: `${Math.max(2, ((renderEnd - renderStart) / totalMs) * 100)}%`
+            };
+        }
+
+        function toggleGanttRowCollapse(projId) {
+            expandedGanttRows[projId] = !expandedGanttRows[projId];
+            localStorage.setItem('expanded_gantt_v9', JSON.stringify(expandedGanttRows));
+            renderAll();
+        }
+
+        function updateOwnerDropdownOptions() {
+            const ownerSelect = document.getElementById('ownerFilter');
+            const previousSelection = currentSelectedOwner;
+            const uniqueOwners = new Set();
+            projects.forEach(p => { if(p.owner) uniqueOwners.add(p.owner.trim()); });
+
+            ownerSelect.innerHTML = '<option value="ALL">ทั้งหมด</option>';
+            Array.from(uniqueOwners).sort().forEach(ownerName => {
+                const opt = document.createElement('option');
+                opt.value = ownerName; opt.innerText = ownerName;
+                ownerSelect.appendChild(opt);
+            });
+            if (uniqueOwners.has(previousSelection)) { ownerSelect.value = previousSelection; currentSelectedOwner = previousSelection; }
+            else { ownerSelect.value = 'ALL'; currentSelectedOwner = 'ALL'; }
+        }
+
+        function handleFilterChange() {
+            currentSelectedYear = parseInt(document.getElementById('yearFilter').value);
+            currentSelectedOwner = document.getElementById('ownerFilter').value;
+            renderAll();
+        }
+
+        function renderAll() {
+            document.getElementById('ganttYearTitle').innerText = currentSelectedYear;
+            projects.forEach(p => p._meta = calcProjectMeta(p));
+
+            let filtered = projects.filter(p => p._meta.years.length === 0 || p._meta.years.includes(currentSelectedYear));
+            if (currentSelectedOwner !== 'ALL') {
+                filtered = filtered.filter(p => p.owner && p.owner.trim() === currentSelectedOwner.trim());
+            }
+
+            filtered.sort((a, b) => !a._meta.start ? 1 : (!b._meta.start ? -1 : new Date(a._meta.start) - new Date(b._meta.start)));
+
+            const ganttRowsContainer = document.getElementById('ganttRowsContainer');
+            const projectCardsContainer = document.getElementById('projectCardsContainer');
+            ganttRowsContainer.innerHTML = ''; projectCardsContainer.innerHTML = '';
+            
+            let counts = { Planning: 0, Ongoing: 0, Done: 0 };
+
+            if(filtered.length === 0) {
+                ganttRowsContainer.innerHTML = `<div class="p-4 text-xs italic text-slate-400 text-center">ไม่มีโปรเจกต์</div>`;
+                projectCardsContainer.innerHTML = `<p class="text-sm text-slate-400 italic text-center py-8 bg-white rounded-2xl border border-slate-100 shadow-xs">ไม่มีแผนงานตามเงื่อนไข</p>`;
+            }
+
+            filtered.forEach(proj => {
+                const meta = proj._meta;
+                counts[meta.status]++;
+                
+                if (expandedGanttRows[proj.id] === undefined) expandedGanttRows[proj.id] = true;
+                const isExpanded = expandedGanttRows[proj.id];
+
+                let mainColorClass = meta.status === 'Ongoing' ? 'bg-blue-600' : (meta.status === 'Done' ? 'bg-emerald-600' : 'bg-amber-600');
+                let cardBadgeClass = meta.status === 'Ongoing' ? 'bg-blue-50 text-blue-700 border-blue-200' : (meta.status === 'Done' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200');
+                const ownerName = proj.owner || 'ไม่ระบุ';
+
+                // GANTT ROW
+                const mainGanttStyle = getGanttStyleForYear(meta.start, meta.end, currentSelectedYear);
+                const mainGanttRow = document.createElement('div');
+                mainGanttRow.className = `grid gantt-grid py-2.5 items-center bg-slate-50/40 hover:bg-slate-50 transition-colors`;
+                mainGanttRow.innerHTML = `
+                    <div onclick="toggleGanttRowCollapse('${proj.id}')" class="font-bold text-slate-800 text-xs truncate pr-2 pl-2 flex items-center gap-1 cursor-pointer select-none">
+                        <i data-lucide="${isExpanded ? 'chevron-down' : 'chevron-right'}" class="w-4 h-4 text-slate-400 shrink-0"></i>
+                        <span class="truncate">${proj.name} <span class="text-[10px] font-medium text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200/60 ml-1">👤 ${ownerName}</span></span>
+                    </div>
+                    <div class="col-span-12 relative">
+                        ${mainGanttStyle.display === 'none' ? `<span class="text-[10px] italic text-slate-300 pl-4">ไม่มีกำหนดการ</span>` : `
+                        <div class="relative w-full h-5 bg-slate-200/40 rounded-sm">
+                            <div class="absolute h-full ${mainColorClass} rounded-md flex items-center px-2 text-[9px] text-white font-bold shadow-xs transition-all" style="left: ${mainGanttStyle.left}; width: ${mainGanttStyle.width};">
+                                <span class="truncate">ภาพรวม: ${meta.percent}%</span>
+                            </div>
+                        </div>`}
+                    </div>`;
+                ganttRowsContainer.appendChild(mainGanttRow);
+
+                // GANTT SUB TASKS
+                const sortedSubs = [...proj.subTasks].sort((a,b) => new Date(a.start) - new Date(b.start));
+                sortedSubs.forEach(sub => {
+                    const subGanttStyle = getGanttStyleForYear(sub.start, sub.end, currentSelectedYear);
+                    if (isExpanded && subGanttStyle.display !== 'none') {
+                        const subGanttRow = document.createElement('div');
+                        subGanttRow.className = "grid gantt-grid py-1.5 items-center bg-white text-[11px] text-slate-600 border-l-4 border-indigo-100";
+                        let subColorClass = sub.done ? 'bg-slate-400' : 'bg-indigo-400';
+                        subGanttRow.innerHTML = `
+                            <div class="pl-6 truncate pr-2 flex items-center gap-1.5 text-slate-500">
+                                <span class="text-indigo-300 font-mono">└</span>
+                                <span class="truncate ${sub.done ? 'line-through opacity-60' : ''}">${sub.name}</span>
+                            </div>
+                            <div class="col-span-12 relative">
+                                <div class="relative w-full h-3.5 bg-slate-50 rounded-xs">
+                                    <div class="absolute h-full ${subColorClass} rounded-xs opacity-75 transition-all" style="left: ${subGanttStyle.left}; width: ${subGanttStyle.width};"></div>
+                                </div>
+                            </div>`;
+                        ganttRowsContainer.appendChild(subGanttRow);
+                    }
+                });
+
+                // CARDS VIEW
+                let subTasksHTML = '';
+                sortedSubs.forEach(sub => {
+                    const isEditing = editingSubTasks[sub.id];
+                    if (isEditing) {
+                        subTasksHTML += `
+                            <div class="p-3 bg-indigo-50/40 rounded-xl border border-indigo-100 space-y-2">
+                                <input type="text" id="edit-name-${sub.id}" value="${sub.name}" class="w-full px-3 py-1 text-xs bg-white border border-indigo-200 rounded-lg">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="date" id="edit-start-${sub.id}" value="${sub.start}" class="w-full text-xs bg-white border rounded-md px-1 py-0.5">
+                                    <input type="date" id="edit-end-${sub.id}" value="${sub.end}" class="w-full text-xs bg-white border rounded-md px-1 py-0.5">
+                                </div>
+                                <div class="flex justify-end gap-1.5 pt-1">
+                                    <button onclick="cancelEditSubTask('${sub.id}')" class="px-2 py-0.5 text-xs bg-white border rounded-md">ยกเลิก</button>
+                                    <button onclick="saveEditSubTask('${proj.id}', '${sub.id}')" class="px-2 py-0.5 text-xs bg-indigo-600 text-white rounded-md">บันทึก</button>
+                                </div>
+                            </div>`;
+                    } else {
+                        subTasksHTML += `
+                            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 bg-white rounded-xl border border-slate-100 shadow-2xs group/item">
+                                <label class="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer overflow-hidden max-w-md">
+                                    <input type="checkbox" ${sub.done ? 'checked' : ''} onchange="toggleSubTask('${proj.id}', '${sub.id}')" class="mt-0.5 rounded-sm text-indigo-600 w-4 h-4">
+                                    <span class="${sub.done ? 'line-through text-slate-400' : 'font-medium text-slate-800'}">${sub.name}</span>
+                                </label>
+                                <div class="flex items-center gap-2 shrink-0 ml-6 sm:ml-0">
+                                    <div class="flex items-center gap-1 text-[11px] bg-slate-50 px-2 py-1 rounded-lg text-slate-500 font-mono">
+                                        <span>${formatThDate(sub.start)}</span> ➔ <span>${formatThDate(sub.end)}</span>
+                                    </div>
+                                    <div class="flex opacity-0 group-hover/item:opacity-100 transition-opacity">
+                                        <button onclick="enableEditSubTask('${sub.id}')" class="text-slate-400 hover:text-indigo-600 p-1"><i data-lucide="pencil" class="w-3.5 h-3.5"></i></button>
+                                        <button onclick="deleteSubTask('${proj.id}', '${sub.id}')" class="text-slate-400 hover:text-rose-500 p-1"><i data-lucide="trash" class="w-3.5 h-3.5"></i></button>
+                                    </div>
+                                </div>
+                            </div>`;
+                    }
+                });
+
+                const card = document.createElement('div');
+                card.className = 'bg-white p-6 rounded-2xl border border-slate-100 shadow-xs space-y-4';
+                card.innerHTML = `
+                    <div class="flex justify-between items-start flex-wrap gap-3">
+                        <div class="space-y-1.5 max-w-xl">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <span class="text-xs px-2.5 py-0.5 rounded-full font-semibold border ${cardBadgeClass}">${meta.status}</span>
+                                <span class="text-xs text-slate-500 font-medium bg-slate-100 border px-2.5 py-0.5 rounded-full">👤 ผู้ดูแล: <strong class="text-slate-800">${ownerName}</strong></span>
+                            </div>
+                            <h3 class="text-lg font-bold text-slate-900">${proj.name}</h3>
+                            ${proj.desc ? `<p class="text-xs text-slate-500">${proj.desc}</p>` : ''}
+                        </div>
+                        <div class="flex gap-1">
+                            <button onclick="editProject('${proj.id}')" class="p-1.5 text-slate-400 hover:text-indigo-600 bg-slate-50 border rounded-lg"><i data-lucide="pencil" class="w-4 h-4"></i></button>
+                            <button onclick="deleteProject('${proj.id}')" class="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 border rounded-lg"><i data-lucide="trash-2" class="w-4 h-4"></i></button>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-50/50 px-4 py-2 rounded-xl border flex items-center justify-between text-xs font-medium text-slate-500">
+                        <span>สำเร็จ: ${meta.done}/${meta.total}</span>
+                        <div class="w-1/2 bg-slate-200 rounded-full h-2 mx-3">
+                            <div class="h-2 rounded-full transition-all ${meta.status === 'Ongoing' ? 'bg-blue-500' : (meta.status === 'Done' ? 'bg-emerald-500' : 'bg-amber-500')}" style="width: ${meta.percent}%"></div>
+                        </div>
+                        <span>${meta.percent}%</span>
+                    </div>
+
+                    <div class="space-y-2">${subTasksHTML || '<p class="text-xs text-slate-400 italic">ยังไม่มีงานย่อย</p>'}</div>
+
+                    <!-- Add Sub Task Form -->
+                    <div class="bg-slate-50/70 p-4 rounded-xl border space-y-3">
+                        <input type="text" id="add-name-${proj.id}" placeholder="ระบุชื่องานย่อย..." class="w-full px-3 py-1.5 text-xs bg-white border rounded-xl">
+                        <div class="grid grid-cols-2 gap-3">
+                            <input type="date" id="add-start-${proj.id}" class="w-full px-2 py-1 text-xs bg-white border rounded-lg text-slate-600">
+                            <input type="date" id="add-end-${proj.id}" class="w-full px-2 py-1 text-xs bg-white border rounded-lg text-slate-600">
+                        </div>
+                        <div class="flex justify-end pt-1">
+                            <button onclick="addSubTask('${proj.id}')" class="bg-slate-800 text-white px-4 py-1.5 rounded-lg text-xs font-semibold">+ เพิ่มเข้าแผนงาน</button>
+                        </div>
+                    </div>`;
+                projectCardsContainer.appendChild(card);
+            });
+
+            document.getElementById('statPlanning').innerText = counts.Planning;
+            document.getElementById('statOngoing').innerText = counts.Ongoing;
+            document.getElementById('statDone').innerText = counts.Done;
+            lucide.createIcons();
+        }
+
+        // === SUPABASE MUTATION LOGIC ===
+        function enableEditSubTask(subId) { editingSubTasks[subId] = true; renderAll(); }
+        function cancelEditSubTask(subId) { delete editingSubTasks[subId]; renderAll(); }
+
+        async function saveEditSubTask(projId, subId) {
+            const name = document.getElementById(`edit-name-${subId}`).value.trim();
+            const start = document.getElementById(`edit-start-${subId}`).value;
+            const end = document.getElementById(`edit-end-${subId}`).value;
+
+            if(!name || !start || !end) return alert('กรุณากรอกข้อมูลให้ครบครับ');
+            showLoader(true);
+            const { error } = await supabase.from('sub_tasks').update({ name, start_date: start, end_date: end }).eq('id', subId);
+            if(!error) await fetchAllDataFromServer();
+            else alert(error.message);
+        }
+
+        async function addSubTask(projId) {
+            const name = document.getElementById(`add-name-${projId}`).value.trim();
+            const start = document.getElementById(`add-start-${projId}`).value;
+            const end = document.getElementById(`add-end-${projId}`).value;
+
+            if(!name || !start || !end) return alert('กรุณากรอกข้อมูลให้ครบครับ');
+            showLoader(true);
+            const { error } = await supabase.from('sub_tasks').insert([{ id: Date.now().toString(), project_id: projId, name, start_date: start, end_date: end, done: false }]);
+            if(!error) await fetchAllDataFromServer();
+            else alert(error.message);
+        }
+
+        async function toggleSubTask(projId, subId) {
+            const p = projects.find(x => x.id === projId);
+            const s = p.subTasks.find(x => x.id === subId);
+            showLoader(true);
+            const { error } = await supabase.from('sub_tasks').update({ done: !s.done }).eq('id', subId);
+            if(!error) await fetchAllDataFromServer();
+        }
+
+        async function deleteSubTask(projId, subId) {
+            if(confirm('ต้องการลบงานย่อยนี้?')) {
+                showLoader(true);
+                const { error } = await supabase.from('sub_tasks').delete().eq('id', subId);
+                if(!error) await fetchAllDataFromServer();
+            }
+        }
+
+        function openProjectModal() { document.getElementById('projectModal').classList.remove('hidden'); document.getElementById('projectModal').classList.add('flex'); }
+        function closeProjectModal() { document.getElementById('projectModal').classList.remove('flex'); document.getElementById('projectModal').classList.add('hidden'); document.getElementById('projectForm').reset(); document.getElementById('projectId').value = ''; }
+        
+        async function saveProject(e) {
+            e.preventDefault();
+            const id = document.getElementById('projectId').value;
+            const name = document.getElementById('projectName').value.trim();
+            const owner = document.getElementById('projectOwner').value.trim();
+            const desc = document.getElementById('projectDesc').value.trim();
+            
+            showLoader(true);
+            if(id) {
+                const { error } = await supabase.from('projects').update({ name, owner, description: desc }).eq('id', id);
+                if(error) alert(error.message);
+            } else {
+                const { error } = await supabase.from('projects').insert([{ id: Date.now().toString(), name, owner, description: desc }]);
+                if(error) alert(error.message);
+            }
+            closeProjectModal();
+            await fetchAllDataFromServer();
+        }
+
+        function editProject(id) {
+            const p = projects.find(proj => proj.id === id); if(!p) return;
+            document.getElementById('projectId').value = p.id;
+            document.getElementById('projectName').value = p.name;
+            document.getElementById('projectOwner').value = p.owner || '';
+            document.getElementById('projectDesc').value = p.desc || '';
+            document.getElementById('modalTitle').innerText = 'แก้ไขรายละเอียดโปรเจกต์หลัก';
+            openProjectModal();
+        }
+
+        async function deleteProject(id) {
+            if(confirm('ยืนยันลบโปรเจกต์หลักและงานย่อยทั้งหมดถาวร?')) {
+                showLoader(true);
+                const { error } = await supabase.from('projects').delete().eq('id', id);
+                if(!error) await fetchAllDataFromServer();
+                else alert(error.message);
+            }
+        }
+
+        window.onload = function() {
+            fetchAllDataFromServer();
+        };
+    </script>
+</body>
+</html>
