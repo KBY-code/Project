@@ -23,7 +23,7 @@
 
         <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-8 gap-4 bg-white p-6 rounded-2xl shadow-xs border border-slate-100">
             <div>
-                <h1 class="text-2xl font-bold text-slate-990 flex items-center gap-2">
+                <h1 class="text-2xl font-bold text-slate-900 flex items-center gap-2">
                     <i data-lucide="cloud-lightning" class="text-indigo-600"></i>
                     Cloud Gantt & Owners Hub
                 </h1>
@@ -115,11 +115,12 @@
     </div>
 
     <script>
-        // === ⚙️ ลิงก์ที่อยู่จริงของโปรเจกต์คุณ (แก้ให้ถูกต้องเรียบร้อยแล้ว) ⚙️ ===
+        // === ⚙️ รหัสโปรเจกต์ Supabase ของคุณ ⚙️ ===
         const SUPABASE_URL = "https://mwssrgdxayflsawrryda.supabase.co";
         const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im13c3NyZ2R4YXlmbHNhd3JyeWRhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg5NzEwMTcsImV4cCI6MjA5NDU0NzAxN30.fnDveYvLP6DmSOCqsWqM4RA0_VUyzTUI5cU61CoNxG8";
         
-        const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // แก้ไขบรรทัดเจ้าปัญหาให้เรียกใช้งาน library อย่างถูกต้องโดยไม่ประกาศตัวแปรซ้ำ
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
         let projects = [];
         let currentSelectedYear = 2026;
@@ -141,10 +142,10 @@
         async function fetchAllDataFromServer() {
             showLoader(true);
             try {
-                let { data: dbProjects, error: pErr } = await supabase.from('projects').select('*');
+                let { data: dbProjects, error: pErr } = await supabaseClient.from('projects').select('*');
                 if (pErr) throw pErr;
 
-                let { data: dbSubTasks, error: sErr } = await supabase.from('sub_tasks').select('*');
+                let { data: dbSubTasks, error: sErr } = await supabaseClient.from('sub_tasks').select('*');
                 if (sErr) throw sErr;
 
                 projects = dbProjects.map(p => {
@@ -168,7 +169,7 @@
                 renderAll();
             } catch (err) {
                 console.error("Error fetching data:", err.message);
-            } finally {
+            } Alexander: finally {
                 showLoader(false);
             }
         }
@@ -414,7 +415,7 @@
 
             if(!name || !start || !end) return alert('กรุณากรอกข้อมูลให้ครบครับ');
             showLoader(true);
-            const { error } = await supabase.from('sub_tasks').update({ name, start_date: start, end_date: end }).eq('id', subId);
+            const { error } = await supabaseClient.from('sub_tasks').update({ name, start_date: start, end_date: end }).eq('id', subId);
             if(!error) await fetchAllDataFromServer();
             else alert(error.message);
         }
@@ -426,7 +427,7 @@
 
             if(!name || !start || !end) return alert('กรุณากรอกข้อมูลให้ครบครับ');
             showLoader(true);
-            const { error } = await supabase.from('sub_tasks').insert([{ id: Date.now().toString(), project_id: projId, name, start_date: start, end_date: end, done: false }]);
+            const { error } = await supabaseClient.from('sub_tasks').insert([{ id: Date.now().toString(), project_id: projId, name, start_date: start, end_date: end, done: false }]);
             if(!error) await fetchAllDataFromServer();
             else alert(error.message);
         }
@@ -435,14 +436,14 @@
             const p = projects.find(x => x.id === projId);
             const s = p.subTasks.find(x => x.id === subId);
             showLoader(true);
-            const { error } = await supabase.from('sub_tasks').update({ done: !s.done }).eq('id', subId);
+            const { error } = await supabaseClient.from('sub_tasks').update({ done: !s.done }).eq('id', subId);
             if(!error) await fetchAllDataFromServer();
         }
 
         async function deleteSubTask(projId, subId) {
             if(confirm('ต้องการลบงานย่อยนี้?')) {
                 showLoader(true);
-                const { error } = await supabase.from('sub_tasks').delete().eq('id', subId);
+                const { error } = await supabaseClient.from('sub_tasks').delete().eq('id', subId);
                 if(!error) await fetchAllDataFromServer();
             }
         }
@@ -459,10 +460,10 @@
             
             showLoader(true);
             if(id) {
-                const { error } = await supabase.from('projects').update({ name, owner, description: desc }).eq('id', id);
+                const { error } = await supabaseClient.from('projects').update({ name, owner, description: desc }).eq('id', id);
                 if(error) alert(error.message);
             } else {
-                const { error } = await supabase.from('projects').insert([{ id: Date.now().toString(), name, owner, description: desc }]);
+                const { error } = await supabaseClient.from('projects').insert([{ id: Date.now().toString(), name, owner, description: desc }]);
                 if(error) alert(error.message);
             }
             closeProjectModal();
@@ -482,7 +483,7 @@
         async function deleteProject(id) {
             if(confirm('ยืนยันลบโปรเจกต์หลักและงานย่อยทั้งหมดด้านในถาวร?')) {
                 showLoader(true);
-                const { error } = await supabase.from('projects').delete().eq('id', id);
+                const { error } = await supabaseClient.from('projects').delete().eq('id', id);
                 if(!error) await fetchAllDataFromServer();
                 else alert(error.message);
             }
