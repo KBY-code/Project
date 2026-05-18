@@ -21,9 +21,9 @@
         .status-error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
         .hidden { display: none; }
         
-        /* สไตล์ใหม่สำหรับโซนกรอกเลขคิว */
+        /* สไตล์โซนกรอกเลขคิว */
         .queue-container { display: flex; gap: 10px; align-items: center; }
-        .queue-prefix-box { width: 80px; } /* ช่องกรอกหมวดหน้ากว้างประมาณ 2-3 ตัวอักษร */
+        .queue-prefix-box { width: 90px; } /* ขยายความกว้างนิดหน่อยเพื่อให้พิมพ์สะดวก */
         .queue-dash { font-size: 20px; font-weight: bold; color: #666; }
         .queue-input-box { flex-grow: 1; }
         .hint-text { font-size: 12px; color: #888; margin-top: 4px; }
@@ -37,7 +37,7 @@
 <div class="card">
     <h2>🔎 ตรวจสอบสิทธิ์</h2>
     <div class="form-group">
-        <label>กรอกเบอร์โทรศัพท์ลูกค้า KPI ประกันภัย :</label>
+        <label>กรอกเบอร์โทรศัพท์ลูกค้า KPI ประกันภัย:</label>
         <input type="text" id="phoneInput" placeholder="กรอกเบอร์โทรศัพท์ เช่น 0891234567" autocomplete="off">
     </div>
     <button class="btn-blue" id="checkBtn" onclick="checkPrivilege()">ตรวจสอบข้อมูล</button>
@@ -52,9 +52,9 @@
     <div class="form-group">
         <label>เลขที่คิว:</label>
         <div class="queue-container">
-            <!-- ช่องกรอกหมวดหลัก (กรอกเองอิสระ) -->
+            <!-- ช่องกรอกหมวดหลัก ล็อกไว้ให้กรอกสูงสุด 2 หลัก เท่านั้น -->
             <div class="queue-prefix-box">
-                <input type="text" id="queuePrefix" placeholder="เช่น 30" autocomplete="off" style="text-align: center;">
+                <input type="text" id="queuePrefix" placeholder="เช่น 30" maxlength="2" autocomplete="off" style="text-align: center;">
             </div>
             
             <div class="queue-dash">-</div>
@@ -110,7 +110,7 @@
         resultBox.className = 'result';
         resultBox.innerText = '⏳ กำลังตรวจสอบข้อมูลในระบบ...';
         actionForm.classList.add('hidden');
-        checkBtn.disabled = true; // ล็อกปุ่มค้นหาชั่วคราว
+        checkBtn.disabled = true;
 
         try {
             const response = await fetch(`${WEB_APP_URL}?action=check&phone=${encodeURIComponent(phone)}`, { method: 'POST' });
@@ -129,7 +129,7 @@
             resultBox.innerText = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อกับฐานข้อมูล';
             resultBox.classList.add('status-error');
         } finally {
-            checkBtn.disabled = false; // ปลดล็อกปุ่มค้นหา
+            checkBtn.disabled = false;
         }
     }
 
@@ -142,7 +142,7 @@
         const saveLoading = document.getElementById('saveLoading');
         
         if(!prefix) {
-            alert('กรุณากรอกหมวดหมู่หน้าของคิวก่อนครับ (เช่น 30 หรือ 50)');
+            alert('กรุณากรอกหมวดหมู่หน้าของคิวก่อนครับ (กรอกได้สูงสุด 2 ตัว เช่น 30 หรือ 50)');
             return;
         }
         if (numPart.length !== 8) {
@@ -154,10 +154,8 @@
             return;
         }
         
-        // ผสมข้อความเข้าด้วยกันตามฟอร์แมต เช่น 30-12345678
         const fullQueueNo = `${prefix}-${numPart}`;
         
-        // แสดงสถานะกำลังโหลด และล็อกปุ่มไม่ให้กดซ้ำได้ระหว่างรอสรุปผล
         stampBtn.disabled = true;
         saveLoading.style.display = 'block';
         
@@ -168,7 +166,6 @@
             if(data.status === 'success') {
                 alert('🎉 บันทึกข้อมูลและใช้สิทธิ์สำเร็จแล้ว!');
                 
-                // ล้างค่าหน้าเว็บเพื่อเตรียมรับลูกค้าคนต่อไป
                 document.getElementById('phoneInput').value = '';
                 document.getElementById('queuePrefix').value = '';
                 document.getElementById('queueNumber').value = '';
@@ -182,7 +179,6 @@
         } catch (error) {
             alert('เกิดข้อผิดพลาดในการส่งข้อมูลกลับไปที่ระบบ กรุณาลองใหม่อีกครั้ง');
         } finally {
-            // ปลดล็อกปุ่มและซ่อนข้อความโหลดเมื่อทำงานเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือล้มเหลว)
             stampBtn.disabled = false;
             saveLoading.style.display = 'none';
         }
