@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบตรวจสอบและใช้สิทธิ์ลูกค้า</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: auto; background-color: #f0f2f5; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
+        h2, h3 { text-align: center; color: #222; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 6px; font-weight: bold; color: #444; }
+        input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
+        button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+        button:hover { opacity: 0.9; }
+        .btn-blue { background-color: #0066cc; color: white; }
+        .btn-green { background-color: #2e7d32; color: white; margin-top: 15px; }
+        .result { padding: 15px; border-radius: 6px; margin-top: 15px; text-align: center; font-weight: bold; display: none; font-size: 16px; }
+        .status-ok { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
+        .status-error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>🔎 ตรวจสอบสิทธิ์</h2>
+    <div class="form-group">
+        <label>กรอกเบอร์โทรศัพท์ลูกค้า:</label>
+        <input type="text" id="phoneInput" placeholder="กรอกเบอร์โทรศัพท์ เช่น 0891234567" autocomplete="off">
+    </div>
+    <button class="btn-blue" onclick="checkPrivilege()">ตรวจสอบข้อมูล</button>
+    
+    <div id="resultBox" class="result"></div>
+</div>
+
+<!-- ส่วนบันทึกข้อมูลที่จะแสดงเมื่อตรวจสอบแล้ว "ใช้สิทธิ์ได้" เท่านั้น -->
+<div id="actionForm" class="card hidden">
+    <h3>✍️ บันทึกการรับสิทธิ์</h3>
+    <div class="form-group">
+        <label>เลขที่คิว:</label>
+        <input type="text" id="queueNo" placeholder="กรอกเลขที่คิวลูกค้า (ถ้ามี)">
+    </div>
+    <div class="form-group">
+        <label>ชื่อผู้ดำเนินการ (Staff):</label>
+        <input type="text" id="staffName" placeholder="ระบุชื่อเจ้าหน้าที่ผู้ทำรายการ">
+    </div>
+    <button class="btn-green" onclick="stampData()">ยืนยันการใช้สิทธิ์</button>
+</div>
+
+<script>
+    // URL Web App จาก Google Apps Script ของคุณ
+    const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxi_kxM6MmQUSDMVogsOsWH2-znE7neRX-_A9NdbK3KSGXXWvkwI45WT6Az_vt28EUl1g/exec"; 
+    
+    let currentRowIndex = null;
+
+    async function checkPrivilege() {
+        const phone = document.getElementById('phoneInput').value.trim();
+        const resultBox = document.getElementById('resultBox');
+        const actionForm = document.getElementById('actionForm');
+        
+        if(!phone) {
+            alert('กรุณากรอกเบอร์โทรศัพท์ก่อนครับ');
+            return;
+        }
+        
+        resultBox.style.display = 'block';
+        resultBox.className = 'result';
+        resultBox.innerText = 'กำลังตรวจสอบข้อมูลในระบบ...';
+        actionForm.classList.add('hidden');
+
+        try {
+            const response = await fetch(`${WEB_APP_URL}?action=check&phone=${encodeURIComponent(phone)}`, { method: 'POST' });
+            const data = await response.json();
+            
+            resultBox.innerText = data.msg;
+            
+            if (data.status === 'ok') {
+                resultBox.classList.add('status-ok');
+                actionForm.classList.remove('hidden');
+                currentRowIndex = data.rowIndex; // เก็บหมายเลขแถวใน Google Sheet ไว้ใช้ตอน Stamp ข้อมูลกลับ
+            } else {
+                resultBox.classList.add('status-error');
+            }
+        } catch (error) {
+            resultBox.innerText = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อกับฐานข้อมูล';
+            resultBox.classList.add('status-error');
+        }
+    }
+
+    async function stampData() {
+        const queueNo = document.getElementById('queueNo').value.trim();
+        const staffName = document.getElementById('staffName').value.trim();
+        
+        if(!staffName) {
+            alert('กรุณากรอกชื่อผู้ดำเนินการก่อนกดยืนยันครับ');
+            return;
+        }
+        
+        try {
+            const response = await fetch(`${WEB_APP_URL}?action=stamp&rowIndex=${currentRowIndex}&queueNo=${encodeURIComponent(queueNo)}&staffName=${encodeURIComponent(staffName)}`, { method: 'POST' });
+            const data = await response.json();
+            
+            if(data.status === 'success') {
+                alert('🎉 บันทึกข้อมูลและใช้สิทธิ์สำเร็จแล้ว!');
+                
+                // ล้างค่าหน้าเว็บเพื่อเตรียมรับลูกค้าคนต่อไป
+                document.getElementById('phoneInput').value = '';
+                document.getElementById('queueNo').value = '';
+                document.getElementById('staffName').value = '';
+                document.getElementById('resultBox').style.display = 'none';
+                document.getElementById('actionForm').classList.add('hidden');
+                currentRowIndex = null;
+            }
+        } catch (error) {
+            alert('เกิดข้อผิดพลาดในการส่งข้อมูลกลับไปที่ระบบ กรุณาลองใหม่อีกครั้ง');
+        }
+    }
+</script>
+
+</body>
+</html>
