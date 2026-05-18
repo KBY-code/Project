@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบตรวจสอบและใช้สิทธิ์ลูกค้า</title>
+    <title>ระบบตรวจสอบและใช้สิทธิ์ลูกค้า KPI ประกันภัย</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: auto; background-color: #f0f2f5; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -19,6 +19,14 @@
         .status-ok { background-color: #e8f5e9; color: #2e7d32; border: 1px solid #c8e6c9; }
         .status-error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
         .hidden { display: none; }
+        
+        /* สไตล์เพิ่มเติมสำหรับโซนเลือกเลขคิว */
+        .queue-container { display: flex; gap: 10px; align-items: center; }
+        .queue-prefix { display: flex; gap: 10px; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; background: #fafafa; }
+        .queue-prefix label { margin-bottom: 0; cursor: pointer; font-size: 16px; }
+        .queue-dash { font-size: 20px; font-weight: bold; color: #666; }
+        .queue-input-box { flex-grow: 1; }
+        .hint-text { font-size: 12px; color: #888; margin-top: 4px; }
     </style>
 </head>
 <body>
@@ -37,10 +45,29 @@
 <!-- ส่วนบันทึกข้อมูลที่จะแสดงเมื่อตรวจสอบแล้ว "ใช้สิทธิ์ได้" เท่านั้น -->
 <div id="actionForm" class="card hidden">
     <h3>✍️ บันทึกการรับสิทธิ์</h3>
+    
     <div class="form-group">
         <label>เลขที่คิว:</label>
-        <input type="text" id="queueNo" placeholder="กรอกเลขที่คิวลูกค้า (ถ้ามี)">
+        <div class="queue-container">
+            <!-- ตัวเลือกหมวดหลัก 30 หรือ 50 -->
+            <div class="queue-prefix">
+                <input type="radio" id="prefix30" name="queuePrefix" value="30" checked>
+                <label for="prefix30">30</label>
+                
+                <input type="radio" id="prefix50" name="queuePrefix" value="50">
+                <label for="prefix50">50</label>
+            </div>
+            
+            <div class="queue-dash">-</div>
+            
+            <!-- ช่องกรอกตัวเลข 8 หลัก -->
+            <div class="queue-input-box">
+                <input type="text" id="queueNumber" placeholder="ตัวเลข 8 หลัก" maxlength="8" oninput="validateNumber(this)" autocomplete="off">
+            </div>
+        </div>
+        <div class="hint-text" id="charCounter">กรอกตัวเลขให้ครบ 8 หลัก (0/8)</div>
     </div>
+
     <div class="form-group">
         <label>ชื่อผู้ดำเนินการ (Staff):</label>
         <input type="text" id="staffName" placeholder="ระบุชื่อเจ้าหน้าที่ผู้ทำรายการ">
@@ -53,6 +80,18 @@
     const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbxi_kxM6MmQUSDMVogsOsWH2-znE7neRX-_A9NdbK3KSGXXWvkwI45WT6Az_vt28EUl1g/exec"; 
     
     let currentRowIndex = null;
+
+    // ฟังก์ชันช่วยจำกัดให้พิมพ์ได้เฉพาะตัวเลข และคอยนับตัวอักษร
+    function validateNumber(input) {
+        input.value = input.value.replace(/[^0-9]/g, ''); // ลบอักขระที่ไม่ใช่ตัวเลขออกทันที
+        const counter = document.getElementById('charCounter');
+        counter.innerText = `กรอกตัวเลขให้ครบ 8 หลัก (${input.value.length}/8)`;
+        if(input.value.length === 8) {
+            counter.style.color = '#2e7d32';
+        } else {
+            counter.style.color = '#888';
+        }
+    }
 
     async function checkPrivilege() {
         const phone = document.getElementById('phoneInput').value.trim();
@@ -78,7 +117,7 @@
             if (data.status === 'ok') {
                 resultBox.classList.add('status-ok');
                 actionForm.classList.remove('hidden');
-                currentRowIndex = data.rowIndex; // เก็บหมายเลขแถวใน Google Sheet ไว้ใช้ตอน Stamp ข้อมูลกลับ
+                currentRowIndex = data.rowIndex; 
             } else {
                 resultBox.classList.add('status-error');
             }
@@ -89,16 +128,28 @@
     }
 
     async function stampData() {
-        const queueNo = document.getElementById('queueNo').value.trim();
+        // ดึงค่า Prefix (30 หรือ 50) ที่เลือก
+        const prefix = document.querySelector('input[name="queuePrefix"]:checked').value;
+        // ดึงค่าตัวเลข 8 หลัก
+        const numPart = document.getElementById('queueNumber').value.trim();
         const staffName = document.getElementById('staffName').value.trim();
+        
+        // ตรวจสอบความถูกต้องของเลขคิว (ต้องมี 8 หลักพอดี)
+        if (numPart.length !== 8) {
+            alert('กรุณากรอกตัวเลขท้ายคิวให้ครบ 8 หลักครับ');
+            return;
+        }
         
         if(!staffName) {
             alert('กรุณากรอกชื่อผู้ดำเนินการก่อนกดยืนยันครับ');
             return;
         }
         
+        // ผสมข้อความเข้าด้วยกันตามฟอร์แมต เช่น 30-12345678
+        const fullQueueNo = `${prefix}-${numPart}`;
+        
         try {
-            const response = await fetch(`${WEB_APP_URL}?action=stamp&rowIndex=${currentRowIndex}&queueNo=${encodeURIComponent(queueNo)}&staffName=${encodeURIComponent(staffName)}`, { method: 'POST' });
+            const response = await fetch(`${WEB_APP_URL}?action=stamp&rowIndex=${currentRowIndex}&queueNo=${encodeURIComponent(fullQueueNo)}&staffName=${encodeURIComponent(staffName)}`, { method: 'POST' });
             const data = await response.json();
             
             if(data.status === 'success') {
@@ -106,8 +157,10 @@
                 
                 // ล้างค่าหน้าเว็บเพื่อเตรียมรับลูกค้าคนต่อไป
                 document.getElementById('phoneInput').value = '';
-                document.getElementById('queueNo').value = '';
+                document.getElementById('queueNumber').value = '';
                 document.getElementById('staffName').value = '';
+                document.getElementById('charCounter').innerText = 'กรอกตัวเลขให้ครบ 8 หลัก (0/8)';
+                document.getElementById('charCounter').style.color = '#888';
                 document.getElementById('resultBox').style.display = 'none';
                 document.getElementById('actionForm').classList.add('hidden');
                 currentRowIndex = null;
