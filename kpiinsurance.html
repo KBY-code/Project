@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ระบบตรวจสอบและใช้สิทธิ์ลูกค้า KPI ประกันภัย</title>
+    <title>ระบบตรวจสอบและใช้สิทธิ์ลูกค้า</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; padding: 20px; max-width: 500px; margin: auto; background-color: #f0f2f5; }
         .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.08); margin-bottom: 20px; }
@@ -13,6 +13,7 @@
         input[type="text"] { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; font-size: 16px; }
         button { width: 100%; padding: 12px; border: none; border-radius: 6px; font-size: 16px; cursor: pointer; font-weight: bold; transition: 0.2s; }
         button:hover { opacity: 0.9; }
+        button:disabled { background-color: #cccccc !important; cursor: not-allowed; opacity: 1; }
         .btn-blue { background-color: #0066cc; color: white; }
         .btn-green { background-color: #2e7d32; color: white; margin-top: 15px; }
         .result { padding: 15px; border-radius: 6px; margin-top: 15px; text-align: center; font-weight: bold; display: none; font-size: 16px; }
@@ -20,24 +21,26 @@
         .status-error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
         .hidden { display: none; }
         
-        /* สไตล์เพิ่มเติมสำหรับโซนเลือกเลขคิว */
+        /* สไตล์ใหม่สำหรับโซนกรอกเลขคิว */
         .queue-container { display: flex; gap: 10px; align-items: center; }
-        .queue-prefix { display: flex; gap: 10px; border: 1px solid #ccc; padding: 8px 12px; border-radius: 6px; background: #fafafa; }
-        .queue-prefix label { margin-bottom: 0; cursor: pointer; font-size: 16px; }
+        .queue-prefix-box { width: 80px; } /* ช่องกรอกหมวดหน้ากว้างประมาณ 2-3 ตัวอักษร */
         .queue-dash { font-size: 20px; font-weight: bold; color: #666; }
         .queue-input-box { flex-grow: 1; }
         .hint-text { font-size: 12px; color: #888; margin-top: 4px; }
+        
+        /* ข้อความสถานะตอนบันทึก */
+        .loading-text { text-align: center; font-weight: bold; color: #0066cc; margin-top: 10px; display: none; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>🔎 ตรวจสอบสิทธิ์ลูกค้า KPI ประกันภัย</h2>
+    <h2>🔎 ตรวจสอบสิทธิ์</h2>
     <div class="form-group">
-        <label>กรอกเบอร์โทรศัพท์ลูกค้า:</label>
+        <label>กรอกเบอร์โทรศัพท์ลูกค้า KPI ประกันภัย :</label>
         <input type="text" id="phoneInput" placeholder="กรอกเบอร์โทรศัพท์ เช่น 0891234567" autocomplete="off">
     </div>
-    <button class="btn-blue" onclick="checkPrivilege()">ตรวจสอบข้อมูล</button>
+    <button class="btn-blue" id="checkBtn" onclick="checkPrivilege()">ตรวจสอบข้อมูล</button>
     
     <div id="resultBox" class="result"></div>
 </div>
@@ -49,13 +52,9 @@
     <div class="form-group">
         <label>เลขที่คิว:</label>
         <div class="queue-container">
-            <!-- ตัวเลือกหมวดหลัก 30 หรือ 50 -->
-            <div class="queue-prefix">
-                <input type="radio" id="prefix30" name="queuePrefix" value="30" checked>
-                <label for="prefix30">30</label>
-                
-                <input type="radio" id="prefix50" name="queuePrefix" value="50">
-                <label for="prefix50">50</label>
+            <!-- ช่องกรอกหมวดหลัก (กรอกเองอิสระ) -->
+            <div class="queue-prefix-box">
+                <input type="text" id="queuePrefix" placeholder="เช่น 30" autocomplete="off" style="text-align: center;">
             </div>
             
             <div class="queue-dash">-</div>
@@ -72,7 +71,10 @@
         <label>ชื่อผู้ดำเนินการ (Staff):</label>
         <input type="text" id="staffName" placeholder="ระบุชื่อเจ้าหน้าที่ผู้ทำรายการ">
     </div>
-    <button class="btn-green" onclick="stampData()">ยืนยันการใช้สิทธิ์</button>
+    <button class="btn-green" id="stampBtn" onclick="stampData()">ยืนยันการใช้สิทธิ์</button>
+    
+    <!-- ข้อความแสดงสถานะตอนโหลดบันทึก -->
+    <div id="saveLoading" class="loading-text">⏳ กำลังบันทึกข้อมูลลงระบบ กรุณารอสักครู่...</div>
 </div>
 
 <script>
@@ -81,9 +83,9 @@
     
     let currentRowIndex = null;
 
-    // ฟังก์ชันช่วยจำกัดให้พิมพ์ได้เฉพาะตัวเลข และคอยนับตัวอักษร
+    // บังคับให้ช่องเลขคิวหลังกรอกได้เฉพาะตัวเลข 0-9 เท่านั้น
     function validateNumber(input) {
-        input.value = input.value.replace(/[^0-9]/g, ''); // ลบอักขระที่ไม่ใช่ตัวเลขออกทันที
+        input.value = input.value.replace(/[^0-9]/g, ''); 
         const counter = document.getElementById('charCounter');
         counter.innerText = `กรอกตัวเลขให้ครบ 8 หลัก (${input.value.length}/8)`;
         if(input.value.length === 8) {
@@ -97,6 +99,7 @@
         const phone = document.getElementById('phoneInput').value.trim();
         const resultBox = document.getElementById('resultBox');
         const actionForm = document.getElementById('actionForm');
+        const checkBtn = document.getElementById('checkBtn');
         
         if(!phone) {
             alert('กรุณากรอกเบอร์โทรศัพท์ก่อนครับ');
@@ -105,8 +108,9 @@
         
         resultBox.style.display = 'block';
         resultBox.className = 'result';
-        resultBox.innerText = 'กำลังตรวจสอบข้อมูลในระบบ...';
+        resultBox.innerText = '⏳ กำลังตรวจสอบข้อมูลในระบบ...';
         actionForm.classList.add('hidden');
+        checkBtn.disabled = true; // ล็อกปุ่มค้นหาชั่วคราว
 
         try {
             const response = await fetch(`${WEB_APP_URL}?action=check&phone=${encodeURIComponent(phone)}`, { method: 'POST' });
@@ -124,22 +128,27 @@
         } catch (error) {
             resultBox.innerText = '❌ เกิดข้อผิดพลาดในการเชื่อมต่อกับฐานข้อมูล';
             resultBox.classList.add('status-error');
+        } finally {
+            checkBtn.disabled = false; // ปลดล็อกปุ่มค้นหา
         }
     }
 
     async function stampData() {
-        // ดึงค่า Prefix (30 หรือ 50) ที่เลือก
-        const prefix = document.querySelector('input[name="queuePrefix"]:checked').value;
-        // ดึงค่าตัวเลข 8 หลัก
+        const prefix = document.getElementById('queuePrefix').value.trim();
         const numPart = document.getElementById('queueNumber').value.trim();
         const staffName = document.getElementById('staffName').value.trim();
         
-        // ตรวจสอบความถูกต้องของเลขคิว (ต้องมี 8 หลักพอดี)
+        const stampBtn = document.getElementById('stampBtn');
+        const saveLoading = document.getElementById('saveLoading');
+        
+        if(!prefix) {
+            alert('กรุณากรอกหมวดหมู่หน้าของคิวก่อนครับ (เช่น 30 หรือ 50)');
+            return;
+        }
         if (numPart.length !== 8) {
             alert('กรุณากรอกตัวเลขท้ายคิวให้ครบ 8 หลักครับ');
             return;
         }
-        
         if(!staffName) {
             alert('กรุณากรอกชื่อผู้ดำเนินการก่อนกดยืนยันครับ');
             return;
@@ -147,6 +156,10 @@
         
         // ผสมข้อความเข้าด้วยกันตามฟอร์แมต เช่น 30-12345678
         const fullQueueNo = `${prefix}-${numPart}`;
+        
+        // แสดงสถานะกำลังโหลด และล็อกปุ่มไม่ให้กดซ้ำได้ระหว่างรอสรุปผล
+        stampBtn.disabled = true;
+        saveLoading.style.display = 'block';
         
         try {
             const response = await fetch(`${WEB_APP_URL}?action=stamp&rowIndex=${currentRowIndex}&queueNo=${encodeURIComponent(fullQueueNo)}&staffName=${encodeURIComponent(staffName)}`, { method: 'POST' });
@@ -157,6 +170,7 @@
                 
                 // ล้างค่าหน้าเว็บเพื่อเตรียมรับลูกค้าคนต่อไป
                 document.getElementById('phoneInput').value = '';
+                document.getElementById('queuePrefix').value = '';
                 document.getElementById('queueNumber').value = '';
                 document.getElementById('staffName').value = '';
                 document.getElementById('charCounter').innerText = 'กรอกตัวเลขให้ครบ 8 หลัก (0/8)';
@@ -167,6 +181,10 @@
             }
         } catch (error) {
             alert('เกิดข้อผิดพลาดในการส่งข้อมูลกลับไปที่ระบบ กรุณาลองใหม่อีกครั้ง');
+        } finally {
+            // ปลดล็อกปุ่มและซ่อนข้อความโหลดเมื่อทำงานเสร็จสิ้น (ไม่ว่าจะสำเร็จหรือล้มเหลว)
+            stampBtn.disabled = false;
+            saveLoading.style.display = 'none';
         }
     }
 </script>
