@@ -384,9 +384,9 @@
 <div id="toast_msg" class="toast"></div>
 
 <script>
-    // 📢 ใส่ Google Sheet ID ตรงนี้ครับ
-    const CONFIG_SPREADSHEET_ID = "1HvpWlTEPjNSwD6q6UWr-O_T-WDaDZP69Wc9JImin2QA";
-    const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; 
+    // 📢 ใส่ URL จาก Google Sheet "Publish to web → CSV" ตรงนี้
+    const CONFIG_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRYvcVygMOGdVU9Rx2RK4Dg_OzE1FXIHJPgBu_vnJxQRBoMVrAMFp8ZV2OsQblG3lGbNJnjh3tppwHf/pub?gid=0&single=true&output=csv";
+    const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000;
 
     let globalExcelData = [];
     let timelineInstance = null;
@@ -421,45 +421,89 @@
 
     /* ════════════════════════════════════════════════
        GOOGLE SHEETS CLOUD FETCH
+       วิธีใช้: ต้อง Publish Sheet เป็น CSV ก่อน
+       File → Share → Publish to web → Sheet1 → CSV → Publish
+       แล้วเอา URL ที่ได้ไปใส่ใน CONFIG_CSV_URL
     ════════════════════════════════════════════════ */
     function fetchGoogleSheetData() {
-        if (!CONFIG_SPREADSHEET_ID || CONFIG_SPREADSHEET_ID === "1HvpWlTEPjNSwD6q6UWr-O_T-WDaDZP69Wc9JImin2QA") {
-            showToast('⚠️ ตรวจพบข้อผิดพลาด: ยังไม่ได้เปลี่ยนค่า Google Sheet ID ในโค้ดครับ', 'warning');
-            document.getElementById('loading_screen').innerHTML = "<p style='color:var(--red);'>❌ ล้มเหลว: โปรดตรวจสอบซอร์สโค้ดและใส่ค่า Google Sheet ID ก่อนเอาขึ้น GitHub Pages</p>";
+        if (!CONFIG_CSV_URL) {
+            document.getElementById('loading_screen').innerHTML =
+                "<p style='color:var(--red);padding:20px;'>❌ โปรดใส่ค่า CONFIG_CSV_URL ในโค้ดก่อนครับ</p>";
             return;
         }
 
-        const url = `https://docs.google.com/spreadsheets/d/${CONFIG_SPREADSHEET_ID}/export?format=xlsx`;
-        
-        fetch(url)
-            .then(res => {
-                if (!res.ok) throw new Error('ไม่สามารถเชื่อมต่อไฟล์ได้ กรุณาตรวจการแชร์สิทธิ์ Viewer');
-                return res.arrayBuffer();
-            })
-            .then(buffer => {
-                const data = new Uint8Array(buffer);
-                const wb = XLSX.read(data, { type: 'array' });
-                const ws = wb.Sheets[wb.SheetNames[0]];
-                globalExcelData = XLSX.utils.sheet_to_json(ws, { defval: "" });
+        document.getElementById('loading_screen').style.display = 'block';
+        document.getElementById('loading_screen').innerHTML = '<p>🔄 กำลังดึงข้อมูลจาก Google Sheets...</p>';
 
-                if (globalExcelData.length === 0) {
-                    showToast('ไม่พบข้อมูลภายใน Google Sheet', 'warning'); return;
+        fetch(CONFIG_CSV_URL)
+            .then(res => {
+                if (!res.ok) throw new Error(`HTTP ${res.status} — ตรวจสอบสิทธิ์การแชร์ (ต้องเป็น Anyone with link → Viewer)`);
+                return res.text();
+            })
+            .then(csvText => {
+                // แปลง CSV → array of objects
+                const rows = parseCSV(csvText);
+                if (rows.length === 0) {
+                    showToast('ไม่พบข้อมูลใน Google Sheet', 'warning');
+                    document.getElementById('loading_screen').innerHTML =
+                        "<p style='color:var(--orange);padding:20px;'>⚠️ ดึงข้อมูลได้แต่ไม่มีแถวข้อมูล กรุณาตรวจสอบชื่อ Sheet และสิทธิ์การแชร์</p>";
+                    return;
                 }
 
+                globalExcelData = rows;
                 document.getElementById('loading_screen').style.display = 'none';
                 document.getElementById('dashboard_area').style.display = 'block';
-                
+
                 generateFilterOptions(globalExcelData);
                 renderTimelineStructure();
                 applyFilters();
 
-                document.getElementById('header_last_update').textContent = `คลาวด์อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')} น.`;
-                showToast('🔄 อัปเดตข้อมูลจากคลาวด์สำเร็จแล้ว', 'success');
+                document.getElementById('header_last_update').textContent =
+                    `คลาวด์อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')} น.`;
+                showToast('✅ โหลดข้อมูลจาก Google Sheets สำเร็จ', 'success');
             })
             .catch(err => {
                 console.error(err);
-                showToast('❌ การโหลดจากคลาวด์ล้มเหลว: ' + err.message, 'warning');
+                document.getElementById('loading_screen').innerHTML =
+                    `<p style='color:var(--red);padding:20px;'>❌ ดึงข้อมูลล้มเหลว: ${err.message}<br><br>` +
+                    `วิธีแก้: ตรวจสอบว่า Google Sheet ถูก Publish to web เป็น CSV แล้ว และ URL ใน CONFIG_CSV_URL ถูกต้อง</p>`;
+                showToast('❌ โหลดข้อมูลจากคลาวด์ล้มเหลว', 'warning');
             });
+    }
+
+    /* แปลง CSV text → array of row objects (รองรับ quoted fields) */
+    function parseCSV(text) {
+        const lines = text.trim().split('\n');
+        if (lines.length < 2) return [];
+
+        const headers = parseCSVLine(lines[0]);
+        const result = [];
+        for (let i = 1; i < lines.length; i++) {
+            const vals = parseCSVLine(lines[i]);
+            if (vals.every(v => v === '')) continue; // ข้าม blank rows
+            const obj = {};
+            headers.forEach((h, idx) => {
+                obj[h] = vals[idx] !== undefined ? vals[idx] : '';
+            });
+            result.push(obj);
+        }
+        return result;
+    }
+
+    function parseCSVLine(line) {
+        const result = [];
+        let cur = '', inQuote = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (ch === '"') {
+                if (inQuote && line[i+1] === '"') { cur += '"'; i++; }
+                else inQuote = !inQuote;
+            } else if (ch === ',' && !inQuote) {
+                result.push(cur.trim()); cur = '';
+            } else { cur += ch; }
+        }
+        result.push(cur.trim());
+        return result;
     }
 
     /* ════════════════════════════════════════════════
@@ -530,21 +574,6 @@
     }
     return null;
 }
-
-        if (s.includes('-')) {
-            const parts = s.split(' ')[0].split('-');
-            if (parts.length === 3) {
-                let yr = parseInt(parts[0], 10);
-                let mon = parseInt(parts[1], 10) - 1;
-                let day = parseInt(parts[2], 10);
-                if (yr > 2500) yr -= 543;
-                return new Date(yr, mon, day, 0, 0, 0, 0);
-            }
-        }
-
-        const p = Date.parse(s); if (!isNaN(p)) { const d = new Date(p); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0); }
-        return null;
-    }
 
     function cleanStr(v) { return v !== undefined && v !== null ? v.toString().trim() : ""; }
 
@@ -636,7 +665,7 @@
             const rowPs   = cleanStr(row['PS']);
             const rowPm   = cleanStr(row['PM']);
             const rowStatus = cleanStr(row['สถานะ']);
-            const rowAccept = cleanStr(row['สถานะรับงาน']); // เผื่อมีคอลัมน์นี้ในอนาคต
+            // ไม่ใช้ rowAccept แยก — อ่านจาก rowStatus ตัวเดียวกัน
 
             if (fType !== 'ALL' && rowType !== fType) return;
             if (fZone !== 'ALL' && rowZone !== fZone) return;
@@ -653,17 +682,19 @@
             const dStart = parseDate(row['วันเริ่ม']);
             const dEnd   = parseDate(row['วันจบ']);
 
-            totalJobsCount++;
-            if (rowStatus === 'สำเร็จ' || rowStatus === 'เสร็จสิ้น') successCount++;
-            else if (rowStatus === 'รับงาน' || rowStatus === 'กำลังทำ') activeCount++;
-            else otherStatusCount++;
+            // ไม่นับแถว "ไม่รับงาน" เป็น job
+            if (rowStatus !== 'ไม่รับงาน') {
+                totalJobsCount++;
+                if (rowStatus === 'สำเร็จ' || rowStatus === 'เสร็จสิ้น') successCount++;
+                else if (rowStatus === 'รับงาน' || rowStatus === 'กำลังทำ') activeCount++;
+                else otherStatusCount++;
+            }
 
-            if (sStart && sEnd) {
+            let isInPeriod = false; // Fix Bug #3: ประกาศ let ให้ถูกต้อง
+            if (sStart && sEnd && rowStatus !== 'ไม่รับงาน') {
                 if (dStart && dEnd) {
-                    const overlap = (dStart <= sEnd && dEnd >= sStart);
-                    if (overlap) periodJobsCount++;
-                } else {
-                    isInPeriod = false;
+                    isInPeriod = (dStart <= sEnd && dEnd >= sStart);
+                    if (isInPeriod) periodJobsCount++;
                 }
             }
 
@@ -675,7 +706,8 @@
                     zone: rowZone,
                     ps: rowPs,
                     pm: rowPm,
-                    isAccepting: (rowAccept !== 'ไม่รับงาน'),
+                    // Fix Bug #1: อ่านจาก rowStatus แทน rowAccept
+                    isAccepting: (rowStatus !== 'ไม่รับงาน'),
                     jobs: [],
                     hasConflict: false,
                     hasSlaRisk: false,
@@ -683,7 +715,12 @@
                 };
             }
 
-            if (sStart && sEnd && dStart && dEnd) {
+            // ถ้าพบแถว "ไม่รับงาน" ให้ mark ช่างว่า inactive (อาจมีแถวอื่นมาก่อน)
+            if (rowStatus === 'ไม่รับงาน') {
+                techRegistry[rId].isAccepting = false;
+            }
+
+            if (sStart && sEnd && dStart && dEnd && rowStatus !== 'ไม่รับงาน') {
                 const overlap = (dStart <= sEnd && dEnd >= sStart);
                 if (overlap) { techRegistry[rId].isVacantInPeriod = false; }
             }
