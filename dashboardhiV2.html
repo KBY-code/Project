@@ -390,8 +390,9 @@
 
     let globalExcelData = [];
     let timelineInstance = null;
-    let timelineGroups   = new vis.DataSet();
-    let timelineItems    = new vis.DataSet();
+    // ✅ Fix: ย้าย vis.DataSet() เข้า DOMContentLoaded เพื่อรอให้ vis.js โหลดเสร็จก่อน
+    let timelineGroups = null;
+    let timelineItems  = null;
     let currentExecutiveMode = null;
     let lastExportData = [];
 
@@ -399,6 +400,8 @@
        INIT & EVENT LISTENERS
     ════════════════════════════════════════════════ */
     window.addEventListener('DOMContentLoaded', () => {
+        timelineGroups = new vis.DataSet();
+        timelineItems  = new vis.DataSet();
         initEventListeners();
         fetchGoogleSheetData();
         setInterval(fetchGoogleSheetData, AUTO_REFRESH_INTERVAL);
