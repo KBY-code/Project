@@ -2,7 +2,7 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <title>ระบบตรวจสอบ Timeline แผนงานช่าง - Executive Dashboard (V31 - GitHub Pages)</title>
+    <title>ระบบตรวจสอบ Timeline แผนงานช่าง - Executive Dashboard (V32 - Auto Mapping & Thai Year Fix)</title>
     <link href="https://unpkg.com/vis-timeline@latest/styles/vis-timeline-graph2d.min.css" rel="stylesheet" type="text/css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
@@ -209,7 +209,7 @@
     <div class="header-icon">📊</div>
     <div>
         <div class="header-title">ระบบตรวจสอบ Timeline แผนงานช่าง</div>
-        <div class="header-sub">Executive Actionable Dashboard — V31 (GitHub Pages Cloud Sync)</div>
+        <div class="header-sub">Executive Actionable Dashboard — V32 (Auto Mapping & Thai Year Fix)</div>
     </div>
     <div class="header-badge" id="header_last_update">กำลังโหลดข้อมูลคลาวด์...</div>
 </div>
@@ -311,7 +311,7 @@
                         <span class="stat-dot" style="background:var(--green);"></span>
                         <span class="stat-label">ว่าง</span>
                         <span class="stat-val" id="kpi_vacant_now">0</span>
-                        <span class="stat-pct" style="color:var(--green);" id="kpi_vacant_p">0%</span>
+                        <span class="stat-pct" style="color:var(--green);">0%</span>
                     </div>
                 </div>
                 <span class="click-hint">🔍 กรองช่างว่าง</span>
@@ -384,9 +384,9 @@
 <div id="toast_msg" class="toast"></div>
 
 <script>
-    // 📢 นำเอา Google Sheet ID มาใส่แทนข้อความด้านล่างนี้ได้เลยครับ 
+    // 📢 ใส่ Google Sheet ID ตรงนี้ครับ
     const CONFIG_SPREADSHEET_ID = "1HvpWlTEPjNSwD6q6UWr-O_T-WDaDZP69Wc9JImin2QA";
-    const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; // รีเฟรชทุกๆ 5 นาทีอัตโนมัติ
+    const AUTO_REFRESH_INTERVAL = 5 * 60 * 1000; 
 
     let globalExcelData = [];
     let timelineInstance = null;
@@ -401,7 +401,6 @@
     window.addEventListener('DOMContentLoaded', () => {
         initEventListeners();
         fetchGoogleSheetData();
-        // ตั้งระบบตั้งเวลาดึงใหม่อัตโนมัติ
         setInterval(fetchGoogleSheetData, AUTO_REFRESH_INTERVAL);
     });
 
@@ -424,7 +423,7 @@
        GOOGLE SHEETS CLOUD FETCH
     ════════════════════════════════════════════════ */
     function fetchGoogleSheetData() {
-        if (!CONFIG_SPREADSHEET_ID || CONFIG_SPREADSHEET_ID === "YOUR_GOOGLE_SHEET_ID_HERE") {
+        if (!CONFIG_SPREADSHEET_ID || CONFIG_SPREADSHEET_ID === "1HvpWlTEPjNSwD6q6UWr-O_T-WDaDZP69Wc9JImin2QA") {
             showToast('⚠️ ตรวจพบข้อผิดพลาด: ยังไม่ได้เปลี่ยนค่า Google Sheet ID ในโค้ดครับ', 'warning');
             document.getElementById('loading_screen').innerHTML = "<p style='color:var(--red);'>❌ ล้มเหลว: โปรดตรวจสอบซอร์สโค้ดและใส่ค่า Google Sheet ID ก่อนเอาขึ้น GitHub Pages</p>";
             return;
@@ -464,7 +463,7 @@
     }
 
     /* ════════════════════════════════════════════════
-       DATE PARSING & LOGIC
+       DATE PARSING WITH THAI YEAR INTELLIGENCE (พ.ศ. -> ค.ศ.)
     ════════════════════════════════════════════════ */
     function parseDatePickerValue(val) {
         if (!val) return null; const s = val.trim(); if (!s) return null;
@@ -472,49 +471,67 @@
             const parts = s.split('/');
             if (parts.length === 3) {
                 let d = parseInt(parts[0], 10), m = parseInt(parts[1], 10) - 1, y = parseInt(parts[2], 10);
-                if (y > 2500) y -= 543; else if (y < 100) y += 2000;
+                if (y > 2500) y -= 543; else if (y < 100) y += 2000; // จัดการตัวเลขสองหลัก
                 if (!isNaN(d) && !isNaN(m) && !isNaN(y)) return new Date(y, m, d);
             }
         }
-        if (s.includes('-')) { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); }
         return null;
     }
 
     function parseDate(raw) {
         if (!raw) return null; const s = raw.toString().trim(); if (!s) return null;
+        
+        // 1. จัดการแบบ Excel Serial Number
         if (!isNaN(s) && s.length > 4 && parseInt(s) > 40000) {
             const excelSerial = parseInt(s);
             const dateObj = new Date((excelSerial - 25569) * 86400 * 1000);
             return new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 0, 0, 0, 0);
         }
-        if (s.includes('-')) {
-            const parts = s.split(' ')[0].split('-');
-            if (parts.length === 3) return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10), 0, 0, 0, 0);
-        }
+        
+        // 2. จัดการข้อความสไตล์ วัน/เดือน/ปี (เช่น 25/5/69 หรือ 25/5/2569)
         if (s.includes('/')) {
             const parts = s.split(' ')[0].split('/');
             if (parts.length === 3) {
-                let day = parseInt(parts[0], 10), mon = parseInt(parts[1], 10) - 1, yr = parseInt(parts[2], 10);
-                if (yr > 2500) yr -= 543; else if (yr < 100) yr += 2000;
+                let day = parseInt(parts[0], 10);
+                let mon = parseInt(parts[1], 10) - 1;
+                let yr = parseInt(parts[2], 10);
+                
+                // แก้ปัญหา พ.ศ. 69 หรือ พ.ศ. 2569 -> ค.ศ. 2026
+                if (yr === 69) { yr = 2026; }
+                else if (yr > 2500) { yr -= 543; }
+                else if (yr < 100) { yr += 2000; }
+                
                 return new Date(yr, mon, day, 0, 0, 0, 0);
             }
         }
+
+        if (s.includes('-')) {
+            const parts = s.split(' ')[0].split('-');
+            if (parts.length === 3) {
+                let yr = parseInt(parts[0], 10);
+                let mon = parseInt(parts[1], 10) - 1;
+                let day = parseInt(parts[2], 10);
+                if (yr > 2500) yr -= 543;
+                return new Date(yr, mon, day, 0, 0, 0, 0);
+            }
+        }
+
         const p = Date.parse(s); if (!isNaN(p)) { const d = new Date(p); return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0); }
         return null;
     }
 
-    function cleanStr(v) { return v ? v.toString().trim() : ""; }
+    function cleanStr(v) { return v !== undefined && v !== null ? v.toString().trim() : ""; }
 
     /* ════════════════════════════════════════════════
-       DYNAMIC DROPDOWNS
+       DYNAMIC DROPDOWNS (ปรับให้เข้ากับคอลัมน์ของชีตคุณ)
     ════════════════════════════════════════════════ */
     function generateFilterOptions(data) {
         const types = new Set(), zones = new Set(), pss = new Set(), pms = new Set();
         data.forEach(r => {
-            if(r['ประเภทงาน']) types.add(cleanStr(r['ประเภทงาน']));
-            if(r['โซน']) zones.add(cleanStr(r['โซน']));
-            if(r['ผู้ดูแล(PS)']) pss.add(cleanStr(r['ผู้ดูแล(PS)']));
-            if(r['ผู้ดูแล(PM)']) pms.add(cleanStr(r['ผู้ดูแล(PM)']));
+            if(r['ประเภท']) types.add(cleanStr(r['ประเภท']));
+            if(r['Zone']) zones.add(cleanStr(r['Zone']));
+            if(r['PS']) pss.add(cleanStr(r['PS']));
+            if(r['PM']) pms.add(cleanStr(r['PM']));
         });
         updateDropdown('filter_type', types);
         updateDropdown('filter_zone', zones);
@@ -526,14 +543,11 @@
         const el = document.getElementById(id); const currentSel = el.value;
         el.innerHTML = '<option value="ALL">-- ทั้งหมด --</option>';
         Array.from(setObj).sort().forEach(v => {
-            const opt = document.createElement('option'); opt.value = v; opt.textContent = v; el.appendChild(opt);
+            if(v) { const opt = document.createElement('option'); opt.value = v; opt.textContent = v; el.appendChild(opt); }
         });
         if(Array.from(setObj).includes(currentSel)) el.value = currentSel;
     }
 
-    /* ════════════════════════════════════════════════
-       TIMELINE COMPONENT RENDER
-    ════════════════════════════════════════════════ */
     function renderTimelineStructure() {
         const container = document.getElementById('visualization');
         if (!timelineInstance) {
@@ -560,7 +574,7 @@
     }
 
     /* ════════════════════════════════════════════════
-       CORE FILTERS & CORE ENGINE (V29 Core)
+       CORE ENGINE MAPPER (เชื่อมข้อมูลเข้าคอลัมน์ภาษาอังกฤษ)
     ════════════════════════════════════════════════ */
     function applyFilters() {
         if (globalExcelData.length === 0) return;
@@ -574,7 +588,6 @@
         const sStart = parseDatePickerValue(document.getElementById('search_start_date').value);
         const sEnd   = parseDatePickerValue(document.getElementById('search_end_date').value);
 
-        // วันนี้สำหรับการคำนวณกำลังพลรายวัน
         const today = new Date(); today.setHours(0,0,0,0);
 
         let totalJobsCount = 0;
@@ -585,44 +598,40 @@
 
         const techRegistry = {};
 
-        // 1. วนลูปคัดกรองข้อมูลดิบ
         globalExcelData.forEach(row => {
-            const tId = cleanStr(row['รหัสช่าง']);
-            const tName = cleanStr(row['ชื่อช่าง']);
+            // 🌟 แมปหัวตารางของคุณ เข้ากับตัวแปรในระบบแดชบอร์ด 🌟
+            const tId = cleanStr(row['Technician_ID']);
+            const tName = cleanStr(row['Technician_Name']);
             if (!tId && !tName) return;
 
             const rId = tId || tName;
-            const rowType = cleanStr(row['ประเภทงาน']);
-            const rowZone = cleanStr(row['โซน']);
-            const rowPs   = cleanStr(row['ผู้ดูแล(PS)']);
-            const rowPm   = cleanStr(row['ผู้ดูแล(PM)']);
-            const rowStatus = cleanStr(row['สถานะงาน']);
-            const rowAccept = cleanStr(row['สถานะรับงาน']);
+            const rowType = cleanStr(row['ประเภท']);
+            const rowZone = cleanStr(row['Zone']);
+            const rowPs   = cleanStr(row['PS']);
+            const rowPm   = cleanStr(row['PM']);
+            const rowStatus = cleanStr(row['สถานะ']);
+            const rowAccept = cleanStr(row['สถานะรับงาน']); // เผื่อมีคอลัมน์นี้ในอนาคต
 
-            // เช็ค Dropdown ตัวกรองหลัก
             if (fType !== 'ALL' && rowType !== fType) return;
             if (fZone !== 'ALL' && rowZone !== fZone) return;
             if (fPs !== 'ALL' && rowPs !== fPs) return;
             if (fPm !== 'ALL' && rowPm !== fPm) return;
 
-            // ค้นหาชื่อ/รหัสช่าง
             if (searchTech) {
                 const matchId = tId.toLowerCase().includes(searchTech);
                 const matchName = tName.toLowerCase().includes(searchTech);
                 if (!matchId && !matchName) return;
             }
 
-            // แตกวันเวลาเริ่ม-สิ้นสุด
-            const dStart = parseDate(row['วันที่เริ่ม']);
-            const dEnd   = parseDate(row['วันที่สิ้นสุด']);
+            // แมปคอลัมน์วันเริ่ม วันจบ
+            const dStart = parseDate(row['วันเริ่ม']);
+            const dEnd   = parseDate(row['วันจบ']);
 
             totalJobsCount++;
-            if (rowStatus === 'สำเร็จ') successCount++;
-            else if (rowStatus === 'รับงาน') activeCount++;
+            if (rowStatus === 'สำเร็จ' || rowStatus === 'เสร็จสิ้น') successCount++;
+            else if (rowStatus === 'รับงาน' || rowStatus === 'กำลังทำ') activeCount++;
             else otherStatusCount++;
 
-            // ตรวจสอบตัวกรองช่วงเวลาช่างว่าง
-            let isInPeriod = true;
             if (sStart && sEnd) {
                 if (dStart && dEnd) {
                     const overlap = (dStart <= sEnd && dEnd >= sStart);
@@ -632,7 +641,6 @@
                 }
             }
 
-            // ลงทะเบียนช่าง
             if (!techRegistry[rId]) {
                 techRegistry[rId] = {
                     id: rId,
@@ -649,33 +657,29 @@
                 };
             }
 
-            // ถ้าช่างมีงานในช่วงที่เราหาช่างว่าง แปลว่าช่าง "ไม่ว่าง"
             if (sStart && sEnd && dStart && dEnd) {
                 const overlap = (dStart <= sEnd && dEnd >= sStart);
-                if (overlap) {
-                    techRegistry[rId].isVacantInPeriod = false;
-                }
+                if (overlap) { techRegistry[rId].isVacantInPeriod = false; }
             }
 
-            // แอดงานเข้าลิสต์ของช่างคนนั้นเพื่อวิเคราะห์ต่อ
             if (dStart && dEnd) {
+                // ดึงชื่องาน หรือ ชื่อลูกค้ามาแสดงบนแท่ง Timeline เพื่อความชัดเจน
+                const jobTitle = cleanStr(row['ชื่อลูกค้า']) ? `${rowType} - ${row['ชื่อลูกค้า']}` : rowType;
                 techRegistry[rId].jobs.push({
                     id: 'job_' + totalJobsCount,
                     start: dStart,
-                    end: new Date(dEnd.getTime() + 86399000), // สิ้นสุดเวลา 23:59:59 น. ของวันนั้นเพื่อให้เต็มแท่งช่องวัน
-                    title: cleanStr(row['ชื่องาน']) || rowType,
+                    end: new Date(dEnd.getTime() + 86399000), 
+                    title: jobTitle,
                     status: rowStatus,
                     rawRow: row
                 });
             }
         });
 
-        // 2. วิเคราะห์หา งานชนกัน (Overlap) และ SLA Risk
+        // ตรวจงานซ้อน และ SLA
         const processedTechList = Object.values(techRegistry);
-        
         processedTechList.forEach(tech => {
             const jobs = tech.jobs;
-            // ตรวจสอบงานชนกัน
             for (let i = 0; i < jobs.length; i++) {
                 for (let j = i + 1; j < jobs.length; j++) {
                     const j1 = jobs[i]; const j2 = jobs[j];
@@ -685,15 +689,14 @@
                     }
                 }
             }
-            // ตรวจสอบเสี่ยงหลุด SLA (มีงานค้างที่เลยกำหนดส่งแล้วและสถานะไม่ใช่สำเร็จ)
             jobs.forEach(j => {
-                if (j.status !== 'สำเร็จ' && j.end < today) {
+                if (j.status !== 'สำเร็จ' && j.status !== 'เสร็จสิ้น' && j.end < today) {
                     tech.hasSlaRisk = true;
                 }
             });
         });
 
-        // 3. จัดการ Executive Filter Drill-down Mode จากการคลิกการ์ด KPI
+        // กรองพิเศษโหมดผู้บริหาร
         let finalTechs = [];
         if (currentExecutiveMode === 'conflict') {
             finalTechs = processedTechList.filter(t => t.hasConflict);
@@ -712,13 +715,11 @@
             finalTechs = processedTechList;
         }
 
-        // 4. บรรจุข้อมูลลงในวิชวล Timeline Components ของ vis.js
         const newGroups = [];
         const newItems = [];
         lastExportData = [];
 
         finalTechs.forEach(tech => {
-            // สร้าง Mini-Table ตรงส่วน Label รายชื่อช่างซีกซ้าย
             const htmlLabel = `
                 <table class="tech-mini-table">
                     <tr class="row-tech-info">
@@ -731,26 +732,15 @@
                 </table>
             `;
 
-            newGroups.push({
-                id: tech.id,
-                content: htmlLabel,
-                className: tech.isAccepting ? '' : 'group-inactive'
-            });
+            newGroups.push({ id: tech.id, content: htmlLabel, className: tech.isAccepting ? '' : 'group-inactive' });
 
             tech.jobs.forEach(j => {
                 let colorClass = 'status-default';
-                if (j.status === 'สำเร็จ') colorClass = 'status-green';
-                else if (j.status === 'รับงาน') colorClass = 'status-blue';
+                if (j.status === 'สำเร็จ' || j.status === 'เสร็จสิ้น') colorClass = 'status-green';
+                else if (j.status === 'รับงาน' || j.status === 'กำลังทำ') colorClass = 'status-blue';
                 if (j.isOverlap) colorClass = 'overlap-error';
 
-                newItems.push({
-                    id: j.id,
-                    group: tech.id,
-                    start: j.start,
-                    end: j.end,
-                    content: j.title,
-                    className: colorClass
-                });
+                newItems.push({ id: j.id, group: tech.id, start: j.start, end: j.end, content: j.title, className: colorClass });
 
                 lastExportData.push({
                     'รหัสช่าง': tech.code,
@@ -761,18 +751,17 @@
                     'ชื่องาน': j.title,
                     'วันที่เริ่ม': j.start.toLocaleDateString('th-TH'),
                     'วันที่สิ้นสุด': j.end.toLocaleDateString('th-TH'),
-                    'สถานะงาน': j.status,
-                    'สถานะงานชนกัน': j.isOverlap ? 'ใช่' : 'ไม่'
+                    'สถานะ': j.status,
+                    'งานชนกัน': j.isOverlap ? 'ใช่' : 'ไม่'
                 });
             });
         });
 
-        // สั่งอัปเดตวิชวลหน้าจอทั้งหมด
         timelineGroups.clear(); timelineGroups.add(newGroups);
         timelineItems.clear();  timelineItems.add(newItems);
         if (timelineInstance) timelineInstance.fit();
 
-        // 5. คำนวณและอัปเดตยอดบน KPI Cards ด้านบนให้สอดคล้องกัน
+        // สรุปผล KPI
         document.getElementById('kpi_total_jobs').textContent = totalJobsCount;
         const rate = totalJobsCount > 0 ? Math.round((successCount / totalJobsCount) * 100) : 0;
         document.getElementById('kpi_completion_rate').textContent = `ปิดสำเร็จ: ${rate}%`;
@@ -798,7 +787,6 @@
         const totalSlas = processedTechList.filter(t => t.hasSlaRisk).length;
         document.getElementById('kpi_sla_count').textContent = totalSlas;
 
-        // คำนวณสถิติกำลังพลรายวัน (Status วันนี้ / ช่วงที่เลือก)
         const vTotal = processedTechList.length;
         const vInactive = processedTechList.filter(t => !t.isAccepting).length;
         
@@ -821,7 +809,6 @@
         document.getElementById('kpi_vacant_now').textContent = vVacant;
         document.getElementById('kpi_vacant_p').textContent = vTotal > 0 ? Math.round((vVacant/vTotal)*100)+'%' : '0%';
 
-        // อัปเดตข้อความกล่องแสดงจำนวนช่างว่างด้านล่าง
         if (sStart && sEnd) {
             document.getElementById('vacant_count_text').textContent = `🔍 พบช่างว่างพร้อมรับงานจำนวน ${vVacant} คน ในช่วงเวลาที่คุณเลือก`;
         } else {
@@ -829,9 +816,6 @@
         }
     }
 
-    /* ════════════════════════════════════════════════
-       EXECUTIVE ACTIONS & DRILL-DOWN MODES
-    ════════════════════════════════════════════════ */
     function toggleExecutiveFilter(mode) {
         const cards = { 'conflict': 'card_conflict', 'sla': 'card_sla', 'vacant': 'card_vacant' };
         Object.values(cards).forEach(id => document.getElementById(id).classList.remove('active-filter'));
@@ -855,9 +839,6 @@
         showToast('🔄 แสดงข้อมูลช่างแบบปกติทั้งหมดแล้ว', 'success');
     }
 
-    /* ════════════════════════════════════════════════
-       EXPORT UTILITIES
-    ════════════════════════════════════════════════ */
     function exportCSV() {
         if (lastExportData.length === 0) { showToast('ไม่มีข้อมูลสำหรับการ Export', 'warning'); return; }
         let csvContent = "\uFEFF"; 
@@ -883,9 +864,6 @@
         showToast('⬇️ ดาวน์โหลดรายงาน CSV เรียบร้อยแล้ว', 'success');
     }
 
-    /* ════════════════════════════════════════════════
-       TOAST ALERTS
-    ════════════════════════════════════════════════ */
     function showToast(msg, type = 'success') {
         const toast = document.getElementById('toast_msg');
         toast.className = 'toast ' + type;
