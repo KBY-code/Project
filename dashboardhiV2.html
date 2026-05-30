@@ -311,7 +311,7 @@
                         <span class="stat-dot" style="background:var(--green);"></span>
                         <span class="stat-label">ว่าง</span>
                         <span class="stat-val" id="kpi_vacant_now">0</span>
-                        <span class="stat-pct" style="color:var(--green);">0%</span>
+                        <span class="stat-pct" style="color:var(--green);" id="kpi_vacant_p">0%</span>
                     </div>
                 </div>
                 <span class="click-hint">🔍 กรองช่างว่าง</span>
@@ -403,8 +403,7 @@
         timelineGroups = new vis.DataSet();
         timelineItems  = new vis.DataSet();
         initEventListeners();
-        fetchGoogleSheetData();
-        setInterval(fetchGoogleSheetData, AUTO_REFRESH_INTERVAL);
+        fetchGoogleSheetData(); // โหลดครั้งแรกอัตโนมัติ กด "รีเฟรช" เองได้
     });
 
     function initEventListeners() {
@@ -440,7 +439,7 @@
 
         fetch(CONFIG_CSV_URL)
             .then(res => {
-                if (!res.ok) throw new Error(`HTTP ${res.status} — ตรวจสอบสิทธิ์การแชร์ (ต้องเป็น Anyone with link → Viewer)`);
+                if (!res.ok && res.status !== 304) throw new Error(`HTTP ${res.status} — ตรวจสอบสิทธิ์การแชร์`);
                 return res.text();
             })
             .then(csvText => {
@@ -658,8 +657,9 @@
 
         globalExcelData.forEach(row => {
             // 🌟 แมปหัวตารางของคุณ เข้ากับตัวแปรในระบบแดชบอร์ด 🌟
-            const tId = cleanStr(row['Technician_ID']);
+            const tId   = cleanStr(row['Technician_ID']);
             const tName = cleanStr(row['Technician_Name']);
+            const tSup  = cleanStr(row['Contractor_Name']);
             if (!tId && !tName) return;
 
             const rId = tId || tName;
@@ -706,10 +706,10 @@
                     id: rId,
                     code: tId || "N/A",
                     name: tName || "ไม่ระบุชื่อ",
+                    sup: tSup || '',
                     zone: rowZone,
                     ps: rowPs,
                     pm: rowPm,
-                    // Fix Bug #1: อ่านจาก rowStatus แทน rowAccept
                     isAccepting: (rowStatus !== 'ไม่รับงาน'),
                     jobs: [],
                     hasConflict: false,
@@ -781,6 +781,20 @@
             finalTechs = processedTechList;
         }
 
+        // เรียงลำดับ: คนที่มีงาน → เรียงจากวันจบล่าสุดมาก่อน, คนไม่รับงาน → ล่างสุด
+        finalTechs.sort((a, b) => {
+            // inactive ไปล่างสุด
+            if (!a.isAccepting && b.isAccepting)  return 1;
+            if (a.isAccepting  && !b.isAccepting) return -1;
+            // ถ้า inactive ทั้งคู่ เรียงตามชื่อ
+            if (!a.isAccepting && !b.isAccepting) return a.name.localeCompare(b.name, 'th');
+            // คนที่มีงาน: หาวันจบล่าสุดของแต่ละคน
+            const latestEnd = t => t.jobs.length
+                ? Math.max(...t.jobs.map(j => j.end.getTime()))
+                : 0;
+            return latestEnd(b) - latestEnd(a); // วันจบไกลสุดอยู่บนสุด
+        });
+
         const newGroups = [];
         const newItems = [];
         lastExportData = [];
@@ -793,7 +807,7 @@
                         <td class="tech-id-txt">[${tech.code}]</td>
                     </tr>
                     <tr class="row-sup-info">
-                        <td colspan="2" class="sup-text-display">PS: ${tech.ps || '-'} | PM: ${tech.pm || '-'} | โซน: ${tech.zone || '-'}</td>
+                        <td colspan="2" class="sup-text-display">SUP: ${tech.sup || '-'}</td>
                     </tr>
                 </table>
             `;
