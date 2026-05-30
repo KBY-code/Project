@@ -479,31 +479,57 @@
     }
 
     function parseDate(raw) {
-        if (!raw) return null; const s = raw.toString().trim(); if (!s) return null;
-        
-        // 1. จัดการแบบ Excel Serial Number
-        if (!isNaN(s) && s.length > 4 && parseInt(s) > 40000) {
-            const excelSerial = parseInt(s);
-            const dateObj = new Date((excelSerial - 25569) * 86400 * 1000);
-            return new Date(dateObj.getUTCFullYear(), dateObj.getUTCMonth(), dateObj.getUTCDate(), 0, 0, 0, 0);
+    if (!raw) return null; 
+    let s = raw.toString().trim(); 
+    if (!s) return null;
+    
+    // 1. ตรวจสอบก่อนเลยว่ามีเครื่องหมายสแลช (/) หรือไม่ (ถ้ามีให้จัดการแบบข้อความวันที่ทันที)
+    if (s.includes('/')) {
+        const parts = s.split(' ')[0].split('/');
+        if (parts.length === 3) {
+            let day = parseInt(parts[0], 10);
+            let mon = parseInt(parts[1], 10) - 1;
+            let yr = parseInt(parts[2], 10);
+            
+            // ตรวจจับและเปลี่ยนปี พ.ศ. สองหลัก '69' หรือสี่หลัก '2569' ให้เป็น ค.ศ. 2026
+            if (yr === 69 || yr === 2569) { yr = 2026; }
+            else if (yr > 2500) { yr -= 543; }
+            else if (yr < 100) { yr += 2000; }
+            
+            return new Date(yr, mon, day, 0, 0, 0, 0);
         }
-        
-        // 2. จัดการข้อความสไตล์ วัน/เดือน/ปี (เช่น 25/5/69 หรือ 25/5/2569)
-        if (s.includes('/')) {
-            const parts = s.split(' ')[0].split('/');
-            if (parts.length === 3) {
-                let day = parseInt(parts[0], 10);
-                let mon = parseInt(parts[1], 10) - 1;
-                let yr = parseInt(parts[2], 10);
-                
-                // แก้ปัญหา พ.ศ. 69 หรือ พ.ศ. 2569 -> ค.ศ. 2026
-                if (yr === 69) { yr = 2026; }
-                else if (yr > 2500) { yr -= 543; }
-                else if (yr < 100) { yr += 2000; }
-                
-                return new Date(yr, mon, day, 0, 0, 0, 0);
-            }
+    }
+
+    // 2. ถ้าเป็นขีด (-) สไตล์ YYYY-MM-DD
+    if (s.includes('-')) {
+        const parts = s.split(' ')[0].split('-');
+        if (parts.length === 3) {
+            let yr = parseInt(parts[0], 10);
+            let mon = parseInt(parts[1], 10) - 1;
+            let day = parseInt(parts[2], 10);
+            if (yr > 2500) yr -= 543;
+            return new Date(yr, mon, day, 0, 0, 0, 0);
         }
+    }
+    
+    // 3. จัดการแบบ Excel Serial Number (สำหรับกรณีที่เป็นตัวเลขเพียวๆ ไม่มีเครื่องหมาย)
+    if (!isNaN(s) && s.length > 4 && parseInt(s) > 40000) {
+        const excelSerial = parseInt(s);
+        const dateObj = new Date((excelSerial - 25569) * 86400 * 1000);
+        let yr = dateObj.getUTCFullYear();
+        if (yr > 2500) yr -= 543;
+        return new Date(yr, dateObj.getUTCMonth(), dateObj.getUTCDate(), 0, 0, 0, 0);
+    }
+
+    const p = Date.parse(s); 
+    if (!isNaN(p)) { 
+        const d = new Date(p); 
+        let yr = d.getFullYear();
+        if (yr > 2500) yr -= 543;
+        return new Date(yr, d.getMonth(), d.getDate(), 0, 0, 0, 0); 
+    }
+    return null;
+}
 
         if (s.includes('-')) {
             const parts = s.split(' ')[0].split('-');
