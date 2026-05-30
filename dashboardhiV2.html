@@ -439,7 +439,8 @@
 
         fetch(CONFIG_CSV_URL)
             .then(res => {
-                if (!res.ok && res.status !== 304) throw new Error(`HTTP ${res.status} — ตรวจสอบสิทธิ์การแชร์`);
+                if (!res.ok && ![301,302,304,307,308].includes(res.status))
+                    throw new Error(`HTTP ${res.status} — ตรวจสอบสิทธิ์การแชร์`);
                 return res.text();
             })
             .then(csvText => {
@@ -460,8 +461,7 @@
                 renderTimelineStructure();
                 applyFilters();
 
-                document.getElementById('header_last_update').textContent =
-                    `คลาวด์อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')} น.`;
+                setText('header_last_update', `คลาวด์อัปเดตล่าสุด: ${new Date().toLocaleTimeString('th-TH')} น.`);
                 showToast('✅ โหลดข้อมูลจาก Google Sheets สำเร็จ', 'success');
             })
             .catch(err => {
@@ -577,6 +577,11 @@
     return null;
 }
 
+    function setText(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.textContent = val;
+    }
+
     function cleanStr(v) { return v !== undefined && v !== null ? v.toString().trim() : ""; }
 
     /* ════════════════════════════════════════════════
@@ -610,7 +615,7 @@
         if (!timelineInstance) {
             const options = {
                 stack: false,
-                groupOrder: 'id',
+                groupOrder: 'order',
                 editable: false,
                 margin: { item: { horizontal: 4, vertical: 5 }, axis: 5 },
                 orientation: 'top',
@@ -842,57 +847,57 @@
         if (timelineInstance) timelineInstance.fit();
 
         // สรุปผล KPI
-        document.getElementById('kpi_total_jobs').textContent = totalJobsCount;
+        setText('kpi_total_jobs', totalJobsCount);
         const rate = totalJobsCount > 0 ? Math.round((successCount / totalJobsCount) * 100) : 0;
-        document.getElementById('kpi_completion_rate').textContent = `ปิดสำเร็จ: ${rate}%`;
+        setText('kpi_completion_rate', `ปิดสำเร็จ: ${rate}%`);
 
         if (sStart && sEnd) {
             document.getElementById('kpi_period_jobs_wrap').style.display = 'block';
-            document.getElementById('kpi_period_jobs').textContent = periodJobsCount;
+            setText('kpi_period_jobs', periodJobsCount);
         } else {
             document.getElementById('kpi_period_jobs_wrap').style.display = 'none';
         }
 
-        document.getElementById('stat_success_n').textContent = successCount;
-        document.getElementById('stat_success_p').textContent = totalJobsCount > 0 ? Math.round((successCount/totalJobsCount)*100)+'%' : '0%';
-        document.getElementById('stat_active_n').textContent = activeCount;
-        document.getElementById('stat_active_p').textContent = totalJobsCount > 0 ? Math.round((activeCount/totalJobsCount)*100)+'%' : '0%';
-        document.getElementById('stat_other_n').textContent = otherStatusCount;
-        document.getElementById('stat_other_p').textContent = totalJobsCount > 0 ? Math.round((otherStatusCount/totalJobsCount)*100)+'%' : '0%';
+        setText('stat_success_n', successCount);
+        setText('stat_success_p', totalJobsCount > 0 ? Math.round((successCount/totalJobsCount)*100)+'%' : '0%');
+        setText('stat_active_n', activeCount);
+        setText('stat_active_p', totalJobsCount > 0 ? Math.round((activeCount/totalJobsCount)*100)+'%' : '0%');
+        setText('stat_other_n', otherStatusCount);
+        setText('stat_other_p', totalJobsCount > 0 ? Math.round((otherStatusCount/totalJobsCount)*100)+'%' : '0%');
 
-        document.getElementById('kpi_total_techs').textContent = finalTechs.length;
+        setText('kpi_total_techs', finalTechs.length);
 
         const totalConflicts = processedTechList.filter(t => t.hasConflict).length;
-        document.getElementById('kpi_conflict_count').textContent = totalConflicts;
+        setText('kpi_conflict_count', totalConflicts);
         const totalSlas = processedTechList.filter(t => t.hasSlaRisk).length;
-        document.getElementById('kpi_sla_count').textContent = totalSlas;
+        setText('kpi_sla_count', totalSlas);
 
         const vTotal = processedTechList.length;
         const vInactive = processedTechList.filter(t => !t.isAccepting).length;
         
         let vVacant = 0;
         if (sStart && sEnd) {
-            document.getElementById('kpi_label_vacant_card').textContent = "📋 ค้นหาช่างว่าง (ช่วงเวลา)";
+            setText('kpi_label_vacant_card', "📋 ค้นหาช่างว่าง (ช่วงเวลา)");
             vVacant = processedTechList.filter(t => t.isVacantInPeriod && t.isAccepting).length;
         } else {
-            document.getElementById('kpi_label_vacant_card').textContent = "📋 สถานะช่างวันนี้";
+            setText('kpi_label_vacant_card', "📋 สถานะช่างวันนี้");
             vVacant = processedTechList.filter(t => !t.jobs.some(j => j.start <= today && j.end >= today) && t.isAccepting).length;
         }
         
         const vBusy = vTotal - vInactive - vVacant;
 
-        document.getElementById('kpi_vacant_total').textContent = vTotal;
-        document.getElementById('kpi_busy_count').textContent = vBusy;
-        document.getElementById('kpi_busy_p').textContent = vTotal > 0 ? Math.round((vBusy/vTotal)*100)+'%' : '0%';
-        document.getElementById('kpi_inactive_count').textContent = vInactive;
-        document.getElementById('kpi_inactive_p').textContent = vTotal > 0 ? Math.round((vInactive/vTotal)*100)+'%' : '0%';
-        document.getElementById('kpi_vacant_now').textContent = vVacant;
-        document.getElementById('kpi_vacant_p').textContent = vTotal > 0 ? Math.round((vVacant/vTotal)*100)+'%' : '0%';
+        setText('kpi_vacant_total', vTotal);
+        setText('kpi_busy_count', vBusy);
+        setText('kpi_busy_p', vTotal > 0 ? Math.round((vBusy/vTotal)*100)+'%' : '0%');
+        setText('kpi_inactive_count', vInactive);
+        setText('kpi_inactive_p', vTotal > 0 ? Math.round((vInactive/vTotal)*100)+'%' : '0%');
+        setText('kpi_vacant_now', vVacant);
+        setText('kpi_vacant_p', vTotal > 0 ? Math.round((vVacant/vTotal)*100)+'%' : '0%');
 
         if (sStart && sEnd) {
-            document.getElementById('vacant_count_text').textContent = `🔍 พบช่างว่างพร้อมรับงานจำนวน ${vVacant} คน ในช่วงเวลาที่คุณเลือก`;
+            setText('vacant_count_text', `🔍 พบช่างว่างพร้อมรับงานจำนวน ${vVacant} คน ในช่วงเวลาที่คุณเลือก`);
         } else {
-            document.getElementById('vacant_count_text').textContent = "";
+            setText('vacant_count_text', "");
         }
     }
 
