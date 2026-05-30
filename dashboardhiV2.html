@@ -734,13 +734,25 @@
             }
 
             if (dStart && dEnd) {
-                // ดึงชื่องาน หรือ ชื่อลูกค้ามาแสดงบนแท่ง Timeline เพื่อความชัดเจน
-                const jobTitle = cleanStr(row['ชื่อลูกค้า']) ? `${rowType} - ${row['ชื่อลูกค้า']}` : rowType;
+                const customer  = cleanStr(row['ชื่อลูกค้า']);
+                const startStr  = dStart.toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'2-digit' });
+                const endStr    = new Date(dEnd).toLocaleDateString('th-TH', { day:'2-digit', month:'2-digit', year:'2-digit' });
+                const psStr     = rowPs || '-';
+                const pmStr     = rowPm || '-';
+
+                // content ที่แสดงบนแถบสี: ห้องประเภท | ลูกค้า | วันที่ | PS/PM
+                const barContent = [
+                    rowType,
+                    customer ? `· ${customer}` : '',
+                    `· ${startStr}→${endStr}`,
+                    `· PS:${psStr} PM:${pmStr}`
+                ].filter(Boolean).join(' ');
+
                 techRegistry[rId].jobs.push({
                     id: 'job_' + totalJobsCount,
                     start: dStart,
-                    end: new Date(dEnd.getTime() + 86399000), 
-                    title: jobTitle,
+                    end: new Date(dEnd.getTime() + 86399000),
+                    title: barContent,
                     status: rowStatus,
                     rawRow: row
                 });
