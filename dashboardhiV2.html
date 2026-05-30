@@ -358,6 +358,10 @@
                     <label>👤 ผู้ดูแล (PM)</label>
                     <select id="filter_pm"><option value="ALL">-- ทั้งหมด --</option></select>
                 </div>
+                <div class="filter-group">
+                    <label>👤 ผู้ดูแล</label>
+                    <select id="filter_supervisor"><option value="ALL">-- ทั้งหมด --</option></select>
+                </div>
                 <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
                     <button class="btn-sm btn-reset" onclick="clearAllDropdowns()">🔄 ล้าง Filter</button>
                     <button class="btn-sm btn-export" onclick="exportCSV()">⬇️ Export CSV</button>
@@ -407,7 +411,7 @@
     });
 
     function initEventListeners() {
-        ['filter_type','filter_zone','filter_ps','filter_pm'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
+        ['filter_type','filter_zone','filter_ps','filter_pm','filter_supervisor'].forEach(id => document.getElementById(id).addEventListener('change', applyFilters));
         document.getElementById('search_tech_text').addEventListener('input', applyFilters);
         document.getElementById('btn_clear_search').addEventListener('click', () => { fpStart.clear(); fpEnd.clear(); applyFilters(); });
 
@@ -417,7 +421,7 @@
     }
 
     function clearAllDropdowns() {
-        ['filter_type','filter_zone','filter_ps','filter_pm'].forEach(id => document.getElementById(id).value = 'ALL');
+        ['filter_type','filter_zone','filter_ps','filter_pm','filter_supervisor'].forEach(id => document.getElementById(id).value = 'ALL');
         applyFilters(); showToast('🔄 ล้าง Filter ทั้งหมดแล้ว', 'success');
     }
 
@@ -588,17 +592,19 @@
        DYNAMIC DROPDOWNS (ปรับให้เข้ากับคอลัมน์ของชีตคุณ)
     ════════════════════════════════════════════════ */
     function generateFilterOptions(data) {
-        const types = new Set(), zones = new Set(), pss = new Set(), pms = new Set();
+        const types = new Set(), zones = new Set(), pss = new Set(), pms = new Set(), supervisors = new Set();
         data.forEach(r => {
             if(r['ประเภท']) types.add(cleanStr(r['ประเภท']));
             if(r['Zone']) zones.add(cleanStr(r['Zone']));
             if(r['PS']) pss.add(cleanStr(r['PS']));
             if(r['PM']) pms.add(cleanStr(r['PM']));
+            if(r['ผู้ดูแล']) supervisors.add(cleanStr(r['ผู้ดูแล']));
         });
         updateDropdown('filter_type', types);
         updateDropdown('filter_zone', zones);
         updateDropdown('filter_ps', pss);
         updateDropdown('filter_pm', pms);
+        updateDropdown('filter_supervisor', supervisors);
     }
 
     function updateDropdown(id, setObj) {
@@ -645,6 +651,7 @@
         const fZone = document.getElementById('filter_zone').value;
         const fPs   = document.getElementById('filter_ps').value;
         const fPm   = document.getElementById('filter_pm').value;
+        const fSup  = document.getElementById('filter_supervisor').value;
         const searchTech = document.getElementById('search_tech_text').value.trim().toLowerCase();
 
         const sStart = parseDatePickerValue(document.getElementById('search_start_date').value);
@@ -672,13 +679,14 @@
             const rowZone = cleanStr(row['Zone']);
             const rowPs   = cleanStr(row['PS']);
             const rowPm   = cleanStr(row['PM']);
+            const rowSupervisor = cleanStr(row['ผู้ดูแล']);
             const rowStatus = cleanStr(row['สถานะ']);
-            // ไม่ใช้ rowAccept แยก — อ่านจาก rowStatus ตัวเดียวกัน
 
             if (fType !== 'ALL' && rowType !== fType) return;
             if (fZone !== 'ALL' && rowZone !== fZone) return;
-            if (fPs !== 'ALL' && rowPs !== fPs) return;
-            if (fPm !== 'ALL' && rowPm !== fPm) return;
+            if (fPs   !== 'ALL' && rowPs   !== fPs)   return;
+            if (fPm   !== 'ALL' && rowPm   !== fPm)   return;
+            if (fSup  !== 'ALL' && rowSupervisor !== fSup) return;
 
             if (searchTech) {
                 const matchId = tId.toLowerCase().includes(searchTech);
@@ -712,6 +720,7 @@
                     code: tId || "N/A",
                     name: tName || "ไม่ระบุชื่อ",
                     sup: tSup || '',
+                    supervisor: rowSupervisor || '',
                     zone: rowZone,
                     ps: rowPs,
                     pm: rowPm,
@@ -762,18 +771,24 @@
         // ตรวจงานซ้อน และ SLA
         const processedTechList = Object.values(techRegistry);
         processedTechList.forEach(tech => {
-            const jobs = tech.jobs;
-            for (let i = 0; i < jobs.length; i++) {
-                for (let j = i + 1; j < jobs.length; j++) {
-                    const j1 = jobs[i]; const j2 = jobs[j];
-                    if (j1.start <= j2.end && j2.start <= j1.end) {
-                        j1.isOverlap = true; j2.isOverlap = true;
+            const activeJobs = tech.jobs.filter(j =>
+                j.status === 'รับงาน' || j.status === 'กำลังทำ'
+            );
+            // Conflict: เช็คเฉพาะงานที่ยัง active เท่านั้น
+            for (let i = 0; i < activeJobs.length; i++) {
+                for (let j = i + 1; j < activeJobs.length; j++) {
+                    if (activeJobs[i].start <= activeJobs[j].end &&
+                        activeJobs[j].start <= activeJobs[i].end) {
+                        activeJobs[i].isOverlap = true;
+                        activeJobs[j].isOverlap = true;
                         tech.hasConflict = true;
                     }
                 }
             }
-            jobs.forEach(j => {
-                if (j.status !== 'สำเร็จ' && j.status !== 'เสร็จสิ้น' && j.end < today) {
+            // SLA: วันจบ <= วันนี้ และยังไม่สำเร็จ (เกินกำหนดแล้ว)
+            tech.jobs.forEach(j => {
+                const isNotDone = j.status !== 'สำเร็จ' && j.status !== 'เสร็จสิ้น' && j.status !== 'ไม่รับงาน';
+                if (isNotDone && j.end <= today) {
                     tech.hasSlaRisk = true;
                 }
             });
