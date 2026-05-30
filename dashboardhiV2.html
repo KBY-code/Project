@@ -783,28 +783,35 @@
                 });
             }
         } else {
-            finalTechs = processedTechList;
+            finalTechs = [...processedTechList]; // spread เพื่อไม่แก้ array ต้นฉบับ
         }
 
-        // เรียงลำดับ: คนที่มีงาน → เรียงจากวันจบล่าสุดมาก่อน, คนไม่รับงาน → ล่างสุด
+        // helper: หาวันจบงานล่าสุดของช่างคนนั้น (0 = ไม่มีงาน)
+        const latestJobEnd = t => t.jobs.length
+            ? Math.max(...t.jobs.map(j => j.end instanceof Date ? j.end.getTime() : 0))
+            : 0;
+
+        // เรียงลำดับ 3 กลุ่ม:
+        // 1. มีงาน (isAccepting=true, มี jobs) → วันจบล่าสุดมาก่อน
+        // 2. ว่าง (isAccepting=true, ไม่มีงาน)
+        // 3. ไม่รับงาน (isAccepting=false) → ล่างสุด
         finalTechs.sort((a, b) => {
-            // inactive ไปล่างสุด
-            if (!a.isAccepting && b.isAccepting)  return 1;
-            if (a.isAccepting  && !b.isAccepting) return -1;
-            // ถ้า inactive ทั้งคู่ เรียงตามชื่อ
-            if (!a.isAccepting && !b.isAccepting) return a.name.localeCompare(b.name, 'th');
-            // คนที่มีงาน: หาวันจบล่าสุดของแต่ละคน
-            const latestEnd = t => t.jobs.length
-                ? Math.max(...t.jobs.map(j => j.end.getTime()))
-                : 0;
-            return latestEnd(b) - latestEnd(a); // วันจบไกลสุดอยู่บนสุด
+            const groupOf = t => {
+                if (!t.isAccepting) return 3;           // ไม่รับงาน
+                if (t.jobs.length === 0) return 2;      // ว่าง
+                return 1;                               // มีงาน
+            };
+            const ga = groupOf(a), gb = groupOf(b);
+            if (ga !== gb) return ga - gb;
+            if (ga === 1) return latestJobEnd(b) - latestJobEnd(a); // วันจบไกลสุดบนสุด
+            return a.name.localeCompare(b.name, 'th');  // กลุ่มเดียวกันเรียงตามชื่อ
         });
 
         const newGroups = [];
         const newItems = [];
         lastExportData = [];
 
-        finalTechs.forEach(tech => {
+        finalTechs.forEach((tech, idx) => {
             const htmlLabel = `
                 <table class="tech-mini-table">
                     <tr class="row-tech-info">
@@ -817,7 +824,7 @@
                 </table>
             `;
 
-            newGroups.push({ id: tech.id, content: htmlLabel, className: tech.isAccepting ? '' : 'group-inactive' });
+            newGroups.push({ id: tech.id, content: htmlLabel, order: idx, className: tech.isAccepting ? '' : 'group-inactive' });
 
             tech.jobs.forEach(j => {
                 let colorClass = 'status-default';
@@ -842,8 +849,11 @@
             });
         });
 
-        timelineGroups.clear(); timelineGroups.add(newGroups);
-        timelineItems.clear();  timelineItems.add(newItems);
+        // clear ก่อนทุกครั้งเพื่อให้ vis-timeline รับ order ใหม่จริงๆ
+        timelineGroups.clear();
+        timelineItems.clear();
+        timelineGroups.add(newGroups);
+        timelineItems.add(newItems);
         if (timelineInstance) timelineInstance.fit();
 
         // สรุปผล KPI
